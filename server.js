@@ -16,11 +16,7 @@ const disk = axios.create({
     'Authorization': 'OAuth ' + process.env.DOCS_KOLMECH_TOKEN,
   }
 })
-// const diskBaseUrl = 'https://cloud-api.yandex.net/v1/disk/resources'
-// const headers = {
-//   'content-type': 'application/json',
-//   'Authorization': 'OAuth ' + process.env.DOCS_KOLMECH_TOKEN,
-// }
+const dealsDirPath = '/Заявки ХОНИНГОВАНИЕ.РУ/'
 
 const skipStatusId = '27256981'
 
@@ -39,7 +35,7 @@ app.post('/lead/status', async (req, res) => {
   const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
   const { statusText: createFolderStatusText } = await disk.put('?'+
     qs.stringify({
-      path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
+      path: `${dealsDirPath}${createdLocalDate}_${deal.name}_${deal.id}`,
     })
   )
   console.log('createFolderStatusText > ', createFolderStatusText)
@@ -52,7 +48,7 @@ app.post('/lead/update', async (req, res) => {
   const deal = body.leads.update[0]
   const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
   const { data: { _embedded: { items: resources }}} = await disk.get('?'+
-    qs.stringify({ path: `/Заявки ХОНИНГОВАНИЕ.РУ/`, })
+    qs.stringify({ path: dealsDirPath })
   )
   const dirNames = resources.filter(r => r.type === 'dir').map(({ name }) => name)
   console.log('dirNames > ', dirNames)
@@ -60,12 +56,12 @@ app.post('/lead/update', async (req, res) => {
   console.log('oldDirName > ', oldDirName)
   const newName = `${createdLocalDate}_${deal.name}_${deal.id}`
   console.log('newName > ', newName)
-  const { statusText: renameFolderStatusText } = await disk.patch('?'+
-    qs.stringify({ path: `/Заявки ХОНИНГОВАНИЕ.РУ/${oldDirName}` }), {
-    data: {
-      name: newName
-    },
-  })
+  const { statusText: renameFolderStatusText } = await disk.post('/move?'+
+    qs.stringify({
+      from: `${dealsDirPath}${oldDirName}`,
+      path: `${dealsDirPath}${newName}`,
+    })
+  )
   console.log('renameFolderStatusText > ', renameFolderStatusText)
 })
 
