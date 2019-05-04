@@ -51,6 +51,7 @@ app.post('/lead/update', async (req, res) => {
     const body = req.body
     console.log('/lead/update req body > ', JSON.stringify(body, null, 2))
     const deal = body.leads.update[0]
+    if (deal.status_id === skipStatusId) return console.log('skipped <')
     const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
     const { data: { _embedded: { items: resources }}} = await disk.get('?'+
       qs.stringify({ path: dealsDirPath })
@@ -59,6 +60,15 @@ app.post('/lead/update', async (req, res) => {
     console.log('dirNames > ', dirNames)
     const oldDirName = dirNames.find(n => n.slice(-deal.id.length) === deal.id)
     console.log('oldDirName > ', oldDirName)
+    if (!oldDirName) {
+      const { statusText: createFolderStatusText } = await disk.put('?'+
+        qs.stringify({
+          path: `${dealsDirPath}${createdLocalDate}_${deal.name}_${deal.id}`,
+        })
+      )
+      console.log('createFolderStatusText > ', createFolderStatusText)
+      return
+    }
     const newName = `${createdLocalDate}_${deal.name}_${deal.id}`
     console.log('newName > ', newName)
     const { statusText: renameFolderStatusText } = await disk.post('/move?'+
