@@ -50,17 +50,20 @@ app.post('/lead/update', async (req, res) => {
   const body = req.body
   console.log('/lead/update req body > ', JSON.stringify(body, null, 2))
   const deal = body.leads.update[0]
+  const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
   const { data: { _embedded: { items: resources }}} = await disk.get('?'+
     qs.stringify({ path: `/Заявки ХОНИНГОВАНИЕ.РУ/`, })
   )
   const dirNames = resources.filter(r => r.type === 'dir').map(({ name }) => name)
   console.log('dirNames > ', dirNames)
-  // const { statusText: renameFolderStatusText } = await disk.patch('?'+
-  //   qs.stringify({
-  //     path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
-  //   })
-  // )
-  // console.log('renameFolderStatusText > ', renameFolderStatusText)
+  const oldDirName = dirNames.find(n => n.slice(-deal.id.length) === deal.id)
+  const { statusText: renameFolderStatusText } = await disk.patch('?'+
+    qs.stringify({ path: `/Заявки ХОНИНГОВАНИЕ.РУ/${oldDirName}` }), {
+    data: {
+      path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`
+    },
+  })
+  console.log('renameFolderStatusText > ', renameFolderStatusText)
 })
 
 const port = process.env.PORT || 8000
