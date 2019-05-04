@@ -57,10 +57,13 @@ app.post('/lead/update', async (req, res) => {
   const dirNames = resources.filter(r => r.type === 'dir').map(({ name }) => name)
   console.log('dirNames > ', dirNames)
   const oldDirName = dirNames.find(n => n.slice(-deal.id.length) === deal.id)
+  console.log('oldDirName > ', oldDirName)
+  const newName = `${createdLocalDate}_${deal.name}_${deal.id}`
+  console.log('newName > ', newName)
   const { statusText: renameFolderStatusText } = await disk.patch('?'+
     qs.stringify({ path: `/Заявки ХОНИНГОВАНИЕ.РУ/${oldDirName}` }), {
     data: {
-      path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`
+      name: newName
     },
   })
   console.log('renameFolderStatusText > ', renameFolderStatusText)
