@@ -50,12 +50,11 @@ app.post('/lead/update', async (req, res) => {
   const body = req.body
   console.log('/lead/update req body > ', JSON.stringify(body, null, 2))
   const deal = body.leads.update[0]
-  const list = await disk.get('?'+
+  const { data: { _embedded: { items: resources }}} = await disk.get('?'+
     qs.stringify({ path: `/Заявки ХОНИНГОВАНИЕ.РУ/`, })
   )
-  console.log('list > ', list)
-  const dealNames = list._embedded.items.filter(d => d.type === 'dir').map(({ name }) => name)
-  console.log('dealNames > ', dealNames)
+  const dirNames = resources.filter(r => r.type === 'dir').map(({ name }) => name)
+  console.log('dirNames > ', dirNames)
   // const { statusText: renameFolderStatusText } = await disk.patch('?'+
   //   qs.stringify({
   //     path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
