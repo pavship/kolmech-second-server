@@ -22,7 +22,7 @@ const disk = axios.create({
 //   'Authorization': 'OAuth ' + process.env.DOCS_KOLMECH_TOKEN,
 // }
 
-const skipStatusId = '27256984'
+const skipStatusId = '27256981'
 
 app.get('/', (req, res) => {
   console.log('received GET request > ' + getCounter++)
@@ -37,28 +37,31 @@ app.post('/lead/status', async (req, res) => {
   console.log('deal > ', deal)
   if (deal.status_id === skipStatusId) return console.log('skipped <')
   const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
-  const created = await disk.put('?'+
+  const { statusText: createFolderStatusText } = await disk.put('?'+
     qs.stringify({
       path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
     })
   )
-  console.log('created > ', created)
+  console.log('createFolderStatusText > ', createFolderStatusText)
 })
 
 app.post('/lead/update', async (req, res) => {
   res.status(200).send('Request handled')
   const body = req.body
   console.log('/lead/update req body > ', JSON.stringify(body, null, 2))
-  // const deal = body.leads && body.leads.status[0]
-  // console.log('deal > ', deal)
-  // const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
-  // console.log('createdLocalDate > ', createdLocalDate)
-  // const created = await disk.put('?'+
+  const deal = body.leads.update[0]
+  const list = await disk.get('?'+
+    qs.stringify({ path: `/Заявки ХОНИНГОВАНИЕ.РУ/`, })
+  )
+  console.log('list > ', list)
+  const dealNames = list._embedded.items.filter(d => d.type === 'dir').map(({ name }) => name)
+  console.log('dealNames > ', dealNames)
+  // const { statusText: renameFolderStatusText } = await disk.patch('?'+
   //   qs.stringify({
   //     path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
   //   })
   // )
-  // console.log('created > ', created)
+  // console.log('renameFolderStatusText > ', renameFolderStatusText)
 })
 
 const port = process.env.PORT || 8000
