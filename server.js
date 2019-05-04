@@ -3,6 +3,7 @@ const app = express()
 
 require('dotenv').config()
 
+const qs = require('qs')
 app.use(express.json())
 app.use(express.urlencoded())
 
@@ -29,6 +30,7 @@ const skipStatusId = '27256984'
 console.log('new Date(1556927568000).toISOString() > ', new Date(1556927568000).toISOString())
 console.log('new Date().getTimezoneOffset() > ', new Date().getTimezoneOffset())
 
+
 app.get('/', (req, res) => {
   console.log('received GET request > ' + getCounter++)
   res.send('Hello World!')
@@ -40,10 +42,16 @@ app.post('/lead/status', async (req, res) => {
   const body = req.body
   console.log('body > ', JSON.stringify(body, null, 2))
   const deal = body.leads && body.leads.status[0]
+  console.log('deal > ', deal)
+  const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
+  console.log('createdLocalDate > ', createdLocalDate)
   const created = await disk.put('/', {
-    params: {
-      path: `/Заявки ХОНИНГОВАНИЕ.РУ/${deal.name}_${deal.id}`,
-    }
+    // params: {
+    //   path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
+    // },
+    data: qs.stringify({
+      path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
+    })
   })
   console.log('created > ', created)
 })
