@@ -1,0 +1,14 @@
+{
+  "name": "kolmech-second-server",
+  "version": "1.0.0",
+  "description": "kolmech aux server orchestrating API services",
+  "main": "server.js",
+  "repository": "https://github.com/pavship/kolmech-second-server.git",
+  "author": "PS",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.18.0",
+    "dotenv": "^8.0.0",
+    "express": "^4.16.4"
+  }
+}
