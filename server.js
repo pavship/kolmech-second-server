@@ -45,14 +45,19 @@ app.post('/lead/status', async (req, res) => {
   console.log('deal > ', deal)
   const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
   console.log('createdLocalDate > ', createdLocalDate)
-  const created = await disk.put('/', {
-    // params: {
-    //   path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
-    // },
-    data: qs.stringify({
-      path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
-    })
+  const created = await disk.put('/', 
+  qs.stringify({
+    path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
   })
+  // {
+  //   // params: {
+  //   //   path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
+  //   // },
+  //   data: qs.stringify({
+  //     path: `/Заявки ХОНИНГОВАНИЕ.РУ/${createdLocalDate}_${deal.name}_${deal.id}`,
+  //   })
+  // }
+  )
   console.log('created > ', created)
 })
 
