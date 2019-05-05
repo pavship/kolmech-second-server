@@ -16,7 +16,7 @@ const disk = axios.create({
 		'Authorization': 'OAuth ' + process.env.DOCS_KOLMECH_TOKEN,
 	}
 })
-const dealsDirPath = '/Заявки ХОНИНГОВАНИЕ.РУ/'
+const dealsDirPath = '/Заявки ХОНИНГОВАНИЕ.РУ'
 
 const skipStatusId = '24659131' //leads with this (PROJECTS) status are not handled
 
@@ -62,7 +62,7 @@ app.post('/lead/status', async (req, res) => {
 		const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
 		const { statusText: createFolderStatusText } = await disk.put('?'+
 			qs.stringify({
-				path: `${dealsDirPath}${createdLocalDate}_${deal.name}_${deal.id}`,
+				path: `${dealsDirPath}/${createdLocalDate}_${deal.name}_${deal.id}`,
 			})
 		)
 		console.log('createFolderStatusText > ', createFolderStatusText)
@@ -82,7 +82,7 @@ app.post('/lead/create', async (req, res) => {
 		const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
 		const { statusText: createFolderStatusText } = await disk.put('?'+
 			qs.stringify({
-				path: `${dealsDirPath}${createdLocalDate}_${deal.name}_${deal.id}`,
+				path: `${dealsDirPath}/${createdLocalDate}_${deal.name}_${deal.id}`,
 			})
 		)
 		console.log('createFolderStatusText > ', createFolderStatusText)
@@ -106,7 +106,7 @@ app.post('/lead/update', async (req, res) => {
 			const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
 			const { statusText: createFolderStatusText } = await disk.put('?'+
 				qs.stringify({
-					path: `${dealsDirPath}${createdLocalDate}_${deal.name}_${deal.id}`,
+					path: `${dealsDirPath}/${createdLocalDate}_${deal.name}_${deal.id}`,
 				})
 			)
 			console.log('createFolderStatusText > ', createFolderStatusText)
@@ -116,8 +116,8 @@ app.post('/lead/update', async (req, res) => {
 		console.log('newFolderName > ', newFolderName)
 		const { statusText: renameFolderStatusText } = await disk.post('/move?'+
 			qs.stringify({
-				from: `${dealsDirPath}${oldFolderName}`,
-				path: `${dealsDirPath}${newFolderName}`,
+				from: `${dealsDirPath}/${oldFolderName}`,
+				path: `${dealsDirPath}/${newFolderName}`,
 			})
 		)
 		console.log('renameFolderStatusText > ', renameFolderStatusText)
@@ -135,7 +135,7 @@ app.post('/lead/delete', async (req, res) => {
 		// if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
 		const dealFolderName = await getDealFolderName(deal.id)
 		if (!dealFolderName) return console.log('no deal folder found <')
-		const dealFolderPath = dealsDirPath + '/' + dealFolderName
+		const dealFolderPath = `${dealsDirPath}/${dealFolderName}`
 		console.log('dealFolderPath > ', dealFolderPath)
 		const resourses = await getDiskResources(dealFolderPath)
 		console.log('resourses in the folder toDelete > ', resourses)
