@@ -130,17 +130,17 @@ app.post('/lead/delete', async (req, res) => {
 	try {
 		res.status(200).send('Request handled')
 		console.log('/lead/delete req.body > ', JSON.stringify(req.body, null, 2))
-		// const deal = req.body.leads.delete[0]
-		// console.log('/lead/delete deal > ', deal)
-		// // if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
-		// const dealFolderName = await getDealFolderName(deal.id)
-		// if (!dealFolderName) return console.log('no deal folder found <')
-		// const dealFolderPath = dealsDirPath + '/' + dealFolderName
-		// const resourses = await getDiskResources(dealFolderPath)
-		// const { statusText: deleteFolderStatusText } = await disk.delete('?'+
-		// 	qs.stringify({ path: dealFolderPath, permanently: !resourses.length })
-		// )
-		// console.log('deleteFolderStatusText > ', deleteFolderStatusText)
+		const deal = req.body.leads.delete[0]
+		console.log('/lead/delete deal > ', deal)
+		// if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
+		const dealFolderName = await getDealFolderName(deal.id)
+		if (!dealFolderName) return console.log('no deal folder found <')
+		const dealFolderPath = dealsDirPath + '/' + dealFolderName
+		const resourses = await getDiskResources(dealFolderPath)
+		const { statusText: deleteFolderStatusText } = await disk.delete('?'+
+			qs.stringify({ path: dealFolderPath, permanently: !resourses.length })
+		)
+		console.log('deleteFolderStatusText > ', deleteFolderStatusText)
 	} catch (err) {
 		console.log('err.message > ', err.message)
 	}
