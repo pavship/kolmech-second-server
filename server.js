@@ -136,7 +136,9 @@ app.post('/lead/delete', async (req, res) => {
 		const dealFolderName = await getDealFolderName(deal.id)
 		if (!dealFolderName) return console.log('no deal folder found <')
 		const dealFolderPath = dealsDirPath + '/' + dealFolderName
+		console.log('dealFolderPath > ', dealFolderPath)
 		const resourses = await getDiskResources(dealFolderPath)
+		console.log('resourses in the folder toDelete > ', resourses)
 		const { statusText: deleteFolderStatusText } = await disk.delete('?'+
 			qs.stringify({ path: dealFolderPath, permanently: !resourses.length })
 		)
