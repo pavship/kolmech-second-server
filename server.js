@@ -74,23 +74,18 @@ app.post('/lead/status', async (req, res) => {
 app.post('/lead/create', async (req, res) => {
 	try {
 		res.status(200).send('Request handled')
-		console.log('/lead/create req.body > ', JSON.stringify(req.body, null, 2))
-		// const deal = req.body.leads.update[0]
-		// console.log('/lead/create deal > ', deal)
-		// console.log('deal.status_id, skipStatusId, deal.status_id === skipStatusId > ', deal.status_id, skipStatusId, deal.status_id === skipStatusId)
-		// if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
-		// const oldFolderName = await getDealFolderName(deal.id)
-		// console.log('oldFolderName > ', oldFolderName)
-		// if (!oldFolderName) {
-		// 	const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
-		// 	const { statusText: createFolderStatusText } = await disk.put('?'+
-		// 		qs.stringify({
-		// 			path: `${dealsDirPath}${createdLocalDate}_${deal.name}_${deal.id}`,
-		// 		})
-		// 	)
-		// 	console.log('createFolderStatusText > ', createFolderStatusText)
-		// 	return
-		// }
+		// console.log('/lead/create req.body > ', JSON.stringify(req.body, null, 2))
+		const deal = req.body.leads.add[0]
+		console.log('/lead/create deal > ', deal)
+		console.log('deal.status_id, skipStatusId, deal.status_id === skipStatusId > ', deal.status_id, skipStatusId, deal.status_id === skipStatusId)
+		if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
+		const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
+		const { statusText: createFolderStatusText } = await disk.put('?'+
+			qs.stringify({
+				path: `${dealsDirPath}${createdLocalDate}_${deal.name}_${deal.id}`,
+			})
+		)
+		console.log('createFolderStatusText > ', createFolderStatusText)
 	} catch (err) {
 		console.log('err.message > ', err.message)
 	}
@@ -99,8 +94,9 @@ app.post('/lead/create', async (req, res) => {
 app.post('/lead/update', async (req, res) => {
 	try {
 		res.status(200).send('Request handled')
-		// console.log('/lead/update req.body > ', JSON.stringify(body, null, 2))
-		const deal = req.body.leads.update[0]
+		const deal = req.body.leads.add
+			? req.body.leads.add[0]
+			: req.body.leads.update[0]
 		console.log('/lead/update deal > ', deal)
 		console.log('deal.status_id, skipStatusId, deal.status_id === skipStatusId > ', deal.status_id, skipStatusId, deal.status_id === skipStatusId)
 		if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
@@ -133,7 +129,8 @@ app.post('/lead/update', async (req, res) => {
 app.post('/lead/delete', async (req, res) => {
 	try {
 		res.status(200).send('Request handled')
-		const deal = req.body.leads.update[0]
+		console.log('/lead/create req.body > ', JSON.stringify(req.body, null, 2))
+		const deal = req.body.leads.delete[0]
 		console.log('/lead/update deal > ', deal)
 		// if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
 		const dealFolderName = await getDealFolderName(deal.id)
