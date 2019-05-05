@@ -29,7 +29,7 @@ const getDiskResources = async path => {
 const getDealFolderName = async dealId => {
 	const dirFoldersNames = (await getDiskResources(dealsDirPath))
 		.filter(r => r.type === 'dir').map(({ name }) => name)
-	return dirFoldersNames.find(n => n.slice(-deal.id.length) === dealId)
+	return dirFoldersNames.find(n => n.slice(-dealId.length) === dealId)
 }
 
 // const deal = {
