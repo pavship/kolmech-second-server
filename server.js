@@ -91,7 +91,7 @@ app.post('/lead/update', async (req, res) => {
 			console.log('createFolderStatusText > ', createFolderStatusText)
 			return
 		}
-		const newFolderName = `${oldFolderName.slice(0, oldFolderName.lastIndexOf('_'))}_${deal.id}`
+		const newFolderName = `${oldFolderName.slice(0, oldFolderName.indexOf('_'))}_${deal.name}_${deal.id}`
 		console.log('newFolderName > ', newFolderName)
 		const { statusText: renameFolderStatusText } = await disk.post('/move?'+
 			qs.stringify({
