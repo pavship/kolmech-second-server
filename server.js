@@ -79,7 +79,8 @@ app.post('/lead/update', async (req, res) => {
 			? req.body.leads.add[0]
 			: req.body.leads.update[0]
 		// console.log('/lead/update deal > ', deal)
-		if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
+		if (deal.status_id === skipStatusId) return
+		// if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
 		const oldFolderName = await getDealFolderName(deal.id)
 		if (!oldFolderName) {
 			const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
@@ -110,6 +111,7 @@ app.post('/lead/delete', async (req, res) => {
 		const deal = req.body.leads.delete[0]
 		// console.log('/lead/delete deal > ', deal)
 		const dealFolderName = await getDealFolderName(deal.id)
+		if (!dealFolderName) return
 		// if (!dealFolderName) return console.log('no deal folder found <')
 		const dealFolderPath = `${dealsDirPath}/${dealFolderName}`
 		const resourses = await getDiskResources(dealFolderPath)
