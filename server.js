@@ -51,45 +51,26 @@ app.get('/', (req, res) => {
 	res.send('Hello World!')
 })
 
-app.post('/lead/status', async (req, res) => {
-	try {
-		res.status(200).send('Request handled')
-		const body = req.body
-		console.log('/lead/status req body > ', JSON.stringify(body, null, 2))
-		const deal = body.leads.status[0]
-		console.log('deal > ', deal)
-		if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
-		const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
-		const { statusText: createFolderStatusText } = await disk.put('?'+
-			qs.stringify({
-				path: `${dealsDirPath}/${createdLocalDate}_${deal.name}_${deal.id}`,
-			})
-		)
-		console.log('createFolderStatusText > ', createFolderStatusText)
-	} catch (err) {
-		console.log('err.message > ', err.message)
-	}
-})
+// app.post('/lead/status', async (req, res) => {
+// 	try {
+// 		res.status(200).send('Request handled')
+// 		const body = req.body
+// 		console.log('/lead/status req body > ', JSON.stringify(body, null, 2))
+// 		const deal = body.leads.status[0]
+// 		console.log('deal > ', deal)
+// 		if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
+// 		const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
+// 		const { statusText: createFolderStatusText } = await disk.put('?'+
+// 			qs.stringify({
+// 				path: `${dealsDirPath}/${createdLocalDate}_${deal.name}_${deal.id}`,
+// 			})
+// 		)
+// 		console.log('createFolderStatusText > ', createFolderStatusText)
+// 	} catch (err) {
+// 		console.log('err.message > ', err.message)
+// 	}
+// })
 
-app.post('/lead/create', async (req, res) => {
-	try {
-		res.status(200).send('Request handled')
-		// console.log('/lead/create req.body > ', JSON.stringify(req.body, null, 2))
-		const deal = req.body.leads.add[0]
-		console.log('/lead/create deal > ', deal)
-		console.log('deal.status_id, skipStatusId, deal.status_id === skipStatusId > ', deal.status_id, skipStatusId, deal.status_id === skipStatusId)
-		if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
-		const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
-		const { statusText: createFolderStatusText } = await disk.put('?'+
-			qs.stringify({
-				path: `${dealsDirPath}/${createdLocalDate}_${deal.name}_${deal.id}`,
-			})
-		)
-		console.log('createFolderStatusText > ', createFolderStatusText)
-	} catch (err) {
-		console.log('err.message > ', err.message)
-	}
-})
 
 app.post('/lead/update', async (req, res) => {
 	try {
@@ -97,11 +78,9 @@ app.post('/lead/update', async (req, res) => {
 		const deal = req.body.leads.add
 			? req.body.leads.add[0]
 			: req.body.leads.update[0]
-		console.log('/lead/update deal > ', deal)
-		console.log('deal.status_id, skipStatusId, deal.status_id === skipStatusId > ', deal.status_id, skipStatusId, deal.status_id === skipStatusId)
+		// console.log('/lead/update deal > ', deal)
 		if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
 		const oldFolderName = await getDealFolderName(deal.id)
-		console.log('oldFolderName > ', oldFolderName)
 		if (!oldFolderName) {
 			const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
 			const { statusText: createFolderStatusText } = await disk.put('?'+
@@ -109,18 +88,17 @@ app.post('/lead/update', async (req, res) => {
 					path: `${dealsDirPath}/${createdLocalDate}_${deal.name}_${deal.id}`,
 				})
 			)
-			console.log('createFolderStatusText > ', createFolderStatusText)
+			// console.log('createFolderStatusText > ', createFolderStatusText)
 			return
 		}
 		const newFolderName = `${oldFolderName.slice(0, oldFolderName.indexOf('_'))}_${deal.name}_${deal.id}`
-		console.log('newFolderName > ', newFolderName)
 		const { statusText: renameFolderStatusText } = await disk.post('/move?'+
 			qs.stringify({
 				from: `${dealsDirPath}/${oldFolderName}`,
 				path: `${dealsDirPath}/${newFolderName}`,
 			})
 		)
-		console.log('renameFolderStatusText > ', renameFolderStatusText)
+		// console.log('renameFolderStatusText > ', renameFolderStatusText)
 	} catch (err) {
 		console.log('err.message > ', err.message)
 	}
@@ -129,20 +107,16 @@ app.post('/lead/update', async (req, res) => {
 app.post('/lead/delete', async (req, res) => {
 	try {
 		res.status(200).send('Request handled')
-		console.log('/lead/delete req.body > ', JSON.stringify(req.body, null, 2))
 		const deal = req.body.leads.delete[0]
-		console.log('/lead/delete deal > ', deal)
-		// if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
+		// console.log('/lead/delete deal > ', deal)
 		const dealFolderName = await getDealFolderName(deal.id)
-		if (!dealFolderName) return console.log('no deal folder found <')
+		// if (!dealFolderName) return console.log('no deal folder found <')
 		const dealFolderPath = `${dealsDirPath}/${dealFolderName}`
-		console.log('dealFolderPath > ', dealFolderPath)
 		const resourses = await getDiskResources(dealFolderPath)
-		console.log('resourses in the folder toDelete > ', resourses)
 		const { statusText: deleteFolderStatusText } = await disk.delete('?'+
 			qs.stringify({ path: dealFolderPath, permanently: !resourses.length })
 		)
-		console.log('deleteFolderStatusText > ', deleteFolderStatusText)
+		// console.log('deleteFolderStatusText > ', deleteFolderStatusText)
 	} catch (err) {
 		console.log('err.message > ', err.message)
 	}
