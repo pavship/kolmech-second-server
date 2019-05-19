@@ -36,9 +36,7 @@ const getDiskResources2Levels = async path => {
 	const level1 = (await getDiskResources(path))
 		.filter(r => r.type === 'dir')
 		.map(({ name }) => name)
-	console.log('level1 > ', level1)
 	const level2 = await Promise.all(level1.map(folder => getDiskResources(`${path}/${folder}`)))
-	console.log('level2 > ', level2)
 	const resources = []
 	level2.forEach((rs, i) => {
 		rs.filter(r => r.type === 'dir')
@@ -136,18 +134,19 @@ app.post('/lead/delete', async (req, res) => {
 		const deal = req.body.leads.delete[0]
 		console.log('/lead/delete deal > ', deal)
 		const resourses = await getDiskResources2Levels(dealsDirPath)
-		console.log('resourses > ', resourses)
+		const resourse = resourses.find(r => r.id === deal.id)
+		if (!resourse) throw new Error('Не найдена папка удаляемой сделки # ' + deal.id)
 		// const statusFolderName = await getFolderName(dealsDirPath, deal.old_status_id)
 		// const dealFolderName = statusFolderName
 		// 	&& await getFolderName(dealsDirPath +'/' + statusFolderName, deal.id)
 		// if (!dealFolderName) return
 		// // if (!dealFolderName) return console.log('no deal folder found <')
-		// const dealFolderPath = `${dealsDirPath}/${dealFolderName}`
-		// const resourses = await getDiskResources(dealFolderPath)
-		// const { statusText: deleteFolderStatusText } = await disk.delete('?'+
-		// 	qs.stringify({ path: dealFolderPath, permanently: !resourses.length })
-		// )
-		// // console.log('deleteFolderStatusText > ', deleteFolderStatusText)
+		const dealFolderPath = `${dealsDirPath}/${resourse.parent}/${resourse.name}`
+		const dealResourses = await getDiskResources(dealFolderPath)
+		const { statusText: deleteFolderStatusText } = await disk.delete('?'+
+			qs.stringify({ path: dealFolderPath, permanently: !dealResourses.length })
+		)
+		console.log('deleteFolderStatusText > ', deleteFolderStatusText)
 	} catch (err) {
 		console.log('err.message > ', err.message)
 	}
