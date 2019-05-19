@@ -32,6 +32,23 @@ const getFolderName = async (path, id) => {
 	return dirFoldersNames.find(n => n.slice(-id.length) === id)
 }
 
+const getDiskResources2Levels = async path => {
+	const level1 = (await getDiskResources(path))
+		.filter(r => r.type === 'dir')
+		.map(({ name }) => name)
+	const level2 = await Promise.all(level1.map(folder => getDiskResources(folder)))
+	const resources = []
+	level2.forEach((rs, i) => {
+		rs.filter(r => r.type === 'dir')
+			.forEach(r => resources.push({
+				name: r.name,
+				id: r.name.slice(r.name.lastIndexOf('_') + 1),
+				parent: level1[i]
+			}))
+	})
+	return resources
+}
+
 // const deal = {
 // 	id: "164837",
 // 	name: "Разработка интернет-магазина",
@@ -116,6 +133,8 @@ app.post('/lead/delete', async (req, res) => {
 		res.status(200).send('Request handled')
 		const deal = req.body.leads.delete[0]
 		console.log('/lead/delete deal > ', deal)
+		const resourses = await getDiskResources2Levels(dealsDirPath)
+		console.log('resourses > ', resourses)
 		// const statusFolderName = await getFolderName(dealsDirPath, deal.old_status_id)
 		// const dealFolderName = statusFolderName
 		// 	&& await getFolderName(dealsDirPath +'/' + statusFolderName, deal.id)
