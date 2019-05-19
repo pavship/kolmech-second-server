@@ -36,7 +36,9 @@ const getDiskResources2Levels = async path => {
 	const level1 = (await getDiskResources(path))
 		.filter(r => r.type === 'dir')
 		.map(({ name }) => name)
-	const level2 = await Promise.all(level1.map(folder => getDiskResources(folder)))
+	console.log('level1 > ', level1)
+	const level2 = await Promise.all(level1.map(folder => getDiskResources(`${path}/${folder}`)))
+	console.log('level2 > ', level2)
 	const resources = []
 	level2.forEach((rs, i) => {
 		rs.filter(r => r.type === 'dir')
