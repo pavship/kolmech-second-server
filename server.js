@@ -95,16 +95,12 @@ app.post('/lead/update', async (req, res) => {
 		const deal = req.body.leads.add
 			? req.body.leads.add[0]
 			: req.body.leads.update[0]
-		console.log('/lead/update deal > ', deal)
-		if (deal.status_id === skipStatusId) return
-		// if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
+		// console.log('/lead/update deal > ', deal)
+		if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
 		const oldStatusFolderName = await getFolderName(dealsDirPath, deal.old_status_id)
-		console.log('oldStatusFolderName > ', oldStatusFolderName)
 		const newStatusFolderName = await getFolderName(dealsDirPath, deal.status_id)
-		console.log('newStatusFolderName > ', newStatusFolderName)
 		const oldFolderName = oldStatusFolderName
 			&& await getFolderName(dealsDirPath +'/' + oldStatusFolderName, deal.id)
-		console.log('oldFolderName > ', oldFolderName)
 		if (!oldFolderName) {
 			const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
 			const { statusText: createFolderStatusText } = await disk.put('?'+
@@ -132,15 +128,10 @@ app.post('/lead/delete', async (req, res) => {
 	try {
 		res.status(200).send('Request handled')
 		const deal = req.body.leads.delete[0]
-		console.log('/lead/delete deal > ', deal)
+		// console.log('/lead/delete deal > ', deal)
 		const resourses = await getDiskResources2Levels(dealsDirPath)
 		const resourse = resourses.find(r => r.id === deal.id)
 		if (!resourse) throw new Error('Не найдена папка удаляемой сделки # ' + deal.id)
-		// const statusFolderName = await getFolderName(dealsDirPath, deal.old_status_id)
-		// const dealFolderName = statusFolderName
-		// 	&& await getFolderName(dealsDirPath +'/' + statusFolderName, deal.id)
-		// if (!dealFolderName) return
-		// // if (!dealFolderName) return console.log('no deal folder found <')
 		const dealFolderPath = `${dealsDirPath}/${resourse.parent}/${resourse.name}`
 		const dealResourses = await getDiskResources(dealFolderPath)
 		const { statusText: deleteFolderStatusText } = await disk.delete('?'+
