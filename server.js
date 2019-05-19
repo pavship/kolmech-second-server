@@ -81,27 +81,30 @@ app.post('/lead/update', async (req, res) => {
 		console.log('/lead/update deal > ', deal)
 		if (deal.status_id === skipStatusId) return
 		// if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
-		// const oldStatusFolderName = await getFolderName(dealsDirPath, deal.status_id)
-		// const newStatusFolderName = await getFolderName(dealsDirPath, deal.status_id)
-		// const oldFolderName = await getFolderName(dealsDirPath +'/' + oldStatusFolderName, deal.id)
+		const oldStatusFolderName = await getFolderName(dealsDirPath, deal.old_status_id)
+		console.log('oldStatusFolderName > ', oldStatusFolderName)
+		const newStatusFolderName = await getFolderName(dealsDirPath, deal.status_id)
+		console.log('newStatusFolderName > ', newStatusFolderName)
+		const oldFolderName = await getFolderName(dealsDirPath +'/' + oldStatusFolderName, deal.id)
+		console.log('oldFolderName > ', oldFolderName)
 		// if (!oldFolderName) {
 		// 	const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
 		// 	const { statusText: createFolderStatusText } = await disk.put('?'+
 		// 		qs.stringify({
-		// 			path: `${dealsDirPath}/${createdLocalDate}_${deal.name}_${deal.id}`,
+		// 			path: `${dealsDirPath}/${newStatusFolderName}/${createdLocalDate}_${deal.name}_${deal.id}`,
 		// 		})
 		// 	)
-		// 	// console.log('createFolderStatusText > ', createFolderStatusText)
+		// 	console.log('createFolderStatusText > ', createFolderStatusText)
 		// 	return
 		// }
 		// const newFolderName = `${oldFolderName.slice(0, oldFolderName.indexOf('_'))}_${deal.name}_${deal.id}`
 		// const { statusText: renameFolderStatusText } = await disk.post('/move?'+
 		// 	qs.stringify({
-		// 		from: `${dealsDirPath}/${oldFolderName}`,
-		// 		path: `${dealsDirPath}/${newFolderName}`,
+		// 		from: `${dealsDirPath}/${oldStatusFolderName}/${oldFolderName}`,
+		// 		path: `${dealsDirPath}/${newStatusFolderName}/${newFolderName}`,
 		// 	})
 		// )
-		// // console.log('renameFolderStatusText > ', renameFolderStatusText)
+		// console.log('renameFolderStatusText > ', renameFolderStatusText)
 	} catch (err) {
 		console.log('err.message > ', err.message)
 	}
