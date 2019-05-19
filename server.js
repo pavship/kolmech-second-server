@@ -26,10 +26,10 @@ const getDiskResources = async path => {
 	return resources
 }
 
-const getDealFolderName = async dealId => {
-	const dirFoldersNames = (await getDiskResources(dealsDirPath))
+const getFolderName = async (path, id) => {
+	const dirFoldersNames = (await getDiskResources(path))
 		.filter(r => r.type === 'dir').map(({ name }) => name)
-	return dirFoldersNames.find(n => n.slice(-dealId.length) === dealId)
+	return dirFoldersNames.find(n => n.slice(-id.length) === id)
 }
 
 // const deal = {
@@ -78,28 +78,30 @@ app.post('/lead/update', async (req, res) => {
 		const deal = req.body.leads.add
 			? req.body.leads.add[0]
 			: req.body.leads.update[0]
-		// console.log('/lead/update deal > ', deal)
+		console.log('/lead/update deal > ', deal)
 		if (deal.status_id === skipStatusId) return
 		// if (deal.status_id === skipStatusId) return console.log('skipped project type deal <')
-		const oldFolderName = await getDealFolderName(deal.id)
-		if (!oldFolderName) {
-			const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
-			const { statusText: createFolderStatusText } = await disk.put('?'+
-				qs.stringify({
-					path: `${dealsDirPath}/${createdLocalDate}_${deal.name}_${deal.id}`,
-				})
-			)
-			// console.log('createFolderStatusText > ', createFolderStatusText)
-			return
-		}
-		const newFolderName = `${oldFolderName.slice(0, oldFolderName.indexOf('_'))}_${deal.name}_${deal.id}`
-		const { statusText: renameFolderStatusText } = await disk.post('/move?'+
-			qs.stringify({
-				from: `${dealsDirPath}/${oldFolderName}`,
-				path: `${dealsDirPath}/${newFolderName}`,
-			})
-		)
-		// console.log('renameFolderStatusText > ', renameFolderStatusText)
+		// const oldStatusFolderName = await getFolderName(dealsDirPath, deal.status_id)
+		// const newStatusFolderName = await getFolderName(dealsDirPath, deal.status_id)
+		// const oldFolderName = await getFolderName(dealsDirPath +'/' + oldStatusFolderName, deal.id)
+		// if (!oldFolderName) {
+		// 	const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
+		// 	const { statusText: createFolderStatusText } = await disk.put('?'+
+		// 		qs.stringify({
+		// 			path: `${dealsDirPath}/${createdLocalDate}_${deal.name}_${deal.id}`,
+		// 		})
+		// 	)
+		// 	// console.log('createFolderStatusText > ', createFolderStatusText)
+		// 	return
+		// }
+		// const newFolderName = `${oldFolderName.slice(0, oldFolderName.indexOf('_'))}_${deal.name}_${deal.id}`
+		// const { statusText: renameFolderStatusText } = await disk.post('/move?'+
+		// 	qs.stringify({
+		// 		from: `${dealsDirPath}/${oldFolderName}`,
+		// 		path: `${dealsDirPath}/${newFolderName}`,
+		// 	})
+		// )
+		// // console.log('renameFolderStatusText > ', renameFolderStatusText)
 	} catch (err) {
 		console.log('err.message > ', err.message)
 	}
@@ -110,7 +112,7 @@ app.post('/lead/delete', async (req, res) => {
 		res.status(200).send('Request handled')
 		const deal = req.body.leads.delete[0]
 		// console.log('/lead/delete deal > ', deal)
-		const dealFolderName = await getDealFolderName(deal.id)
+		const dealFolderName = await getFolderName(deal.id)
 		if (!dealFolderName) return
 		// if (!dealFolderName) return console.log('no deal folder found <')
 		const dealFolderPath = `${dealsDirPath}/${dealFolderName}`
