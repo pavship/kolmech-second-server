@@ -102,10 +102,10 @@ app.post('/lead/update', async (req, res) => {
 		const oldFolderName = oldStatusFolderName
 			&& await getFolderName(dealsDirPath +'/' + oldStatusFolderName, deal.id)
 		if (!oldFolderName) {
-			const createdLocalDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
+			const localCreatedDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
 			const { statusText: createFolderStatusText } = await disk.put('?'+
 				qs.stringify({
-					path: `${dealsDirPath}/${newStatusFolderName}/${createdLocalDate}_${deal.name}_${deal.id}`,
+					path: `${dealsDirPath}/${newStatusFolderName}/${localCreatedDate}_${deal.name}_${deal.id}`,
 				})
 			)
 			console.log('createFolderStatusText > ', createFolderStatusText)
