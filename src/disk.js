@@ -26,7 +26,8 @@ const getDiskResources2Levels = async path => {
 		.filter(r => r.type === 'dir')
 		.map(({ name }) => name)
 	const level2 = await Promise.all(level1.map(folder => getDiskResources(`${path}/${folder}`)))
-	const resources = []
+  const resources = []
+  console.log('resources > ', JSON.stringify(resources, null, 2))
 	level2.forEach((rs, i) => {
 		rs.filter(r => r.type === 'dir')
 			.forEach(r => resources.push({
@@ -38,9 +39,22 @@ const getDiskResources2Levels = async path => {
 	return resources
 }
 
+const getDiskResource2Levels = async (path, id, errMessage) => {
+  const resourses = await getDiskResources2Levels(path)
+  const resourse = resourses.find(r => r.id === id)
+  if (!resourse) throw new Error((errMessage || '') + id)
+  const resoursePath = `${path}/${resourse.parent}/${resourse.name}`
+  return {
+    ...resourse,
+    path: resoursePath,
+    children: await getDiskResources(resoursePath)
+  }
+}
+
 module.exports = { 
   disk,
   getDiskResources,
   getFolderName,
-  getDiskResources2Levels
+  getDiskResources2Levels,
+  getDiskResource2Levels
 }
