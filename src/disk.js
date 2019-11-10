@@ -9,6 +9,26 @@ const disk = axios.create({
 	}
 })
 
+// {
+//   "name": "2019-09-30_Рама велосипеда_21502237",
+//   "exif": {},
+//   "created": "2019-09-30T06:29:47+00:00",
+//   "resource_id": "873797308:75e38fb4536207ea11b79f782f2fdf36cc84c4fa647a1acb1304936eaace2850",
+//   "share": {
+//     "is_root": false,
+//     "is_owned": true,
+//     "rights": "rw"
+//   },
+//   "modified": "2019-11-08T23:45:57+00:00",
+//   "path": "disk:/Заявки ХОНИНГОВАНИЕ.РУ/93_Закрыто и не реализовано_143/2019-09-30_Рама велосипеда_21502237",
+//   "comment_ids": {
+//     "private_resource": "873797308:75e38fb4536207ea11b79f782f2fdf36cc84c4fa647a1acb1304936eaace2850",
+//     "public_resource": "873797308:75e38fb4536207ea11b79f782f2fdf36cc84c4fa647a1acb1304936eaace2850"
+//   },
+//   "type": "dir",
+//   "revision": 1573256757670060
+// }
+
 const getDiskResources = async path => {
 	const { data: { _embedded: { items: resources }}} = await disk.get('?'+
 		qs.stringify({ path, limit: 10000 }))
@@ -30,9 +50,10 @@ const getDiskResources2Levels = async path => {
 	level2.forEach((rs, i) => {
 		rs.filter(r => r.type === 'dir')
 			.forEach(r => resources.push({
-				name: r.name,
+				name: name,
 				id: r.name.slice(r.name.lastIndexOf('_') + 1),
-				parent: level1[i]
+        parent: level1[i],
+        path: r.path.slice(5)
 			}))
   })
 	return resources
@@ -40,14 +61,11 @@ const getDiskResources2Levels = async path => {
 
 const getDiskResource2Levels = async (path, id, errMessage) => {
   const resources = await getDiskResources2Levels(path)
-  console.log('resources > ', JSON.stringify(resources, null, 2))
   const resource = resources.find(r => r.id === id)
   if (!resource) throw new Error((errMessage || '') + id)
-  const resourcePath = `${path}/${resource.parent}/${resource.name}`
   return {
     ...resource,
-    path: resourcePath,
-    children: await getDiskResources(resourcePath)
+    children: await getDiskResources(resource.path)
   }
 }
 
