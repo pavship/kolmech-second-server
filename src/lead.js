@@ -47,7 +47,9 @@ const upsertDealDiskFolder = async deal => {
 }
 
 const deleteDealDiskFolder = async deal => {
-  const { path, children } = await getDiskResource2Levels(dealsDirPath, deal.id, 'Не найдена папка сделки # ')
+  const resource = await getDiskResource2Levels(dealsDirPath, deal.id, 'Не найдена папка сделки # ')
+  console.log('resource > ', resource)
+  const { path, children } = resource
   const { statusText: deleteFolderStatusText } = await disk.delete('?'+
     qs.stringify({ path, permanently: !children.length })
   )

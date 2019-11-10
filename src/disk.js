@@ -27,7 +27,6 @@ const getDiskResources2Levels = async path => {
 		.map(({ name }) => name)
 	const level2 = await Promise.all(level1.map(folder => getDiskResources(`${path}/${folder}`)))
   const resources = []
-  console.log('resources > ', JSON.stringify(resources, null, 2))
 	level2.forEach((rs, i) => {
 		rs.filter(r => r.type === 'dir')
 			.forEach(r => resources.push({
@@ -35,19 +34,20 @@ const getDiskResources2Levels = async path => {
 				id: r.name.slice(r.name.lastIndexOf('_') + 1),
 				parent: level1[i]
 			}))
-	})
+  })
 	return resources
 }
 
 const getDiskResource2Levels = async (path, id, errMessage) => {
-  const resourses = await getDiskResources2Levels(path)
-  const resourse = resourses.find(r => r.id === id)
-  if (!resourse) throw new Error((errMessage || '') + id)
-  const resoursePath = `${path}/${resourse.parent}/${resourse.name}`
+  const resources = await getDiskResources2Levels(path)
+  console.log('resources > ', JSON.stringify(resources, null, 2))
+  const resource = resources.find(r => r.id === id)
+  if (!resource) throw new Error((errMessage || '') + id)
+  const resourcePath = `${path}/${resource.parent}/${resource.name}`
   return {
-    ...resourse,
-    path: resoursePath,
-    children: await getDiskResources(resoursePath)
+    ...resource,
+    path: resourcePath,
+    children: await getDiskResources(resourcePath)
   }
 }
 
