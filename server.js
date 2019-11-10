@@ -3,7 +3,7 @@ const app = express()
 require('dotenv').config()
 const qs = require('qs')
 app.use(express.json())
-app.use(express.urlencoded())
+app.use(express.urlencoded({ extended: true }))
 
 const { disk, getFolderName, getDiskResources, getDiskResources2Levels } = require('./src/disk')
 
