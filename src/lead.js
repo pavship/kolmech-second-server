@@ -19,28 +19,26 @@ const { disk, getFolderName, getDiskResources, getDiskResources2Levels, getDiskR
 const dealsDirPath = '/Заявки ХОНИНГОВАНИЕ.РУ'
 
 const upsertDealDiskFolder = async deal => {
-  const oldStatusFolderName = await getFolderName(dealsDirPath, deal.old_status_id)
+  const resource = await getDiskResource2Levels(dealsDirPath, deal.id, 'Не найдена папка сделки # ')
+  console.log('resource > ', resource)
   const newStatusFolderName = await getFolderName(dealsDirPath, deal.status_id)
-  console.log('oldStatusFolderName > ', oldStatusFolderName)
   console.log('newStatusFolderName > ', newStatusFolderName)
-  const oldFolderName = oldStatusFolderName
-    && await getFolderName(dealsDirPath +'/' + oldStatusFolderName, deal.id)
-  console.log('oldFolderName > ', oldFolderName)
-  if (!oldFolderName) {
-    const localCreatedDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
+  const localCreatedDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
+  const newPath = `${dealsDirPath}/${newStatusFolderName}/${localCreatedDate}_${deal.name}_${deal.id}`
+  console.log('newPath > ', newPath)
+  if (!resource) {
     const { statusText: createFolderStatusText } = await disk.put('?'+
       qs.stringify({
-        path: `${dealsDirPath}/${newStatusFolderName}/${localCreatedDate}_${deal.name}_${deal.id}`,
+        path: newPath,
       })
     )
     console.log('createFolderStatusText > ', createFolderStatusText)
     return
   }
-  const newFolderName = `${oldFolderName.slice(0, oldFolderName.indexOf('_'))}_${deal.name}_${deal.id}`
   const { statusText: renameFolderStatusText } = await disk.post('/move?'+
     qs.stringify({
-      from: `${dealsDirPath}/${oldStatusFolderName}/${oldFolderName}`,
-      path: `${dealsDirPath}/${newStatusFolderName}/${newFolderName}`,
+      from: resource.path,
+      path: newPath,
     })
   )
   console.log('renameFolderStatusText > ', renameFolderStatusText)
