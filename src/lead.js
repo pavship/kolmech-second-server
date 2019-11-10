@@ -1,5 +1,5 @@
 const qs = require('qs')
-const { disk, getFolderName, getDiskResources, getDiskResources2Levels, getDiskResource2Levels } = require('./disk')
+const { disk, getFolderName, getDiskResource2Levels } = require('./disk')
 
 // const deal = {
 // 	id: "164837",
@@ -20,12 +20,9 @@ const dealsDirPath = '/Заявки ХОНИНГОВАНИЕ.РУ'
 
 const upsertDealDiskFolder = async deal => {
   const resource = await getDiskResource2Levels(dealsDirPath, deal.id)
-  console.log('resource > ', resource)
   const newStatusFolderName = await getFolderName(dealsDirPath, deal.status_id)
-  console.log('newStatusFolderName > ', newStatusFolderName)
   const localCreatedDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
   const newPath = `${dealsDirPath}/${newStatusFolderName}/${localCreatedDate}_${deal.name}_${deal.id}`
-  console.log('newPath > ', newPath)
   if (!resource) {
     const { statusText: createFolderStatusText } = await disk.put('?'+
       qs.stringify({
@@ -47,7 +44,6 @@ const upsertDealDiskFolder = async deal => {
 const deleteDealDiskFolder = async deal => {
   const resource = await getDiskResource2Levels(dealsDirPath, deal.id)
   if (!resource) return console.log('Не найдена папка сделки # ' + deal.id)
-  console.log('resource > ', resource)
   const { path, children } = resource
   const { statusText: deleteFolderStatusText } = await disk.delete('?'+
     qs.stringify({ path, permanently: !children.length })
