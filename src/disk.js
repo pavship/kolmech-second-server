@@ -1,4 +1,5 @@
 const axios = require('axios')
+const qs = require('qs')
 
 const disk = axios.create({
 	baseURL: 'https://cloud-api.yandex.net/v1/disk/resources',
