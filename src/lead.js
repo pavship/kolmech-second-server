@@ -19,7 +19,7 @@ const { disk, getFolderName, getDiskResources, getDiskResources2Levels, getDiskR
 const dealsDirPath = '/Заявки ХОНИНГОВАНИЕ.РУ'
 
 const upsertDealDiskFolder = async deal => {
-  const resource = await getDiskResource2Levels(dealsDirPath, deal.id, 'Не найдена папка сделки # ')
+  const resource = await getDiskResource2Levels(dealsDirPath, deal.id)
   console.log('resource > ', resource)
   const newStatusFolderName = await getFolderName(dealsDirPath, deal.status_id)
   console.log('newStatusFolderName > ', newStatusFolderName)
@@ -45,7 +45,8 @@ const upsertDealDiskFolder = async deal => {
 }
 
 const deleteDealDiskFolder = async deal => {
-  const resource = await getDiskResource2Levels(dealsDirPath, deal.id, 'Не найдена папка сделки # ')
+  const resource = await getDiskResource2Levels(dealsDirPath, deal.id)
+  if (!resource) return console.log('Не найдена папка сделки # ' + deal.id)
   console.log('resource > ', resource)
   const { path, children } = resource
   const { statusText: deleteFolderStatusText } = await disk.delete('?'+

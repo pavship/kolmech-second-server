@@ -50,7 +50,7 @@ const getDiskResources2Levels = async path => {
 	level2.forEach((rs, i) => {
 		rs.filter(r => r.type === 'dir')
 			.forEach(r => resources.push({
-				name: name,
+				name: r.name,
 				id: r.name.slice(r.name.lastIndexOf('_') + 1),
         parent: level1[i],
         path: r.path.slice(5)
@@ -59,10 +59,10 @@ const getDiskResources2Levels = async path => {
 	return resources
 }
 
-const getDiskResource2Levels = async (path, id, errMessage) => {
+const getDiskResource2Levels = async (path, id) => {
   const resources = await getDiskResources2Levels(path)
   const resource = resources.find(r => r.id === id)
-  if (!resource) throw new Error((errMessage || '') + id)
+  if (!resource) return
   return {
     ...resource,
     children: await getDiskResources(resource.path)
