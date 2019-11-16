@@ -12,7 +12,7 @@ const megaplan = async ( method, uri ) => {
           '',
           'application/x-www-form-urlencoded',
           date,
-          'mp54489646.megaplan.ru' + uri
+          process.env.MEGAPLAN_HOST + uri
         ].join('\n') )
         .digest('hex')
     ).toString('base64')

@@ -4,7 +4,7 @@ require('dotenv').config()
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
-const { upsertDealDiskFolder, deleteDealDiskFolder, upsertDealMpProject } = require('./src/lead')
+const { upsertDealDiskFolder, deleteDealDiskFolder, upsertDealMpProject, deleteDealMpProject } = require('./src/lead')
 
 app.get('/', (req, res) => {
 	res.send('Hello World!')
@@ -32,7 +32,11 @@ app.post('/lead/delete', async (req, res) => {
 		res.status(200).send('Request handled')
 		const deal = req.body.leads.delete[0]
 		console.log('/lead/delete deal > ', deal)
-		await deleteDealDiskFolder(deal)
+		// await deleteDealDiskFolder(deal)
+		await Promise.all([
+			deleteDealDiskFolder(deal),
+			deleteDealMpProject(deal)
+		])
 	} catch (err) {
 		console.log('app.post(/lead/delete) caught err.message > ', err.message)
 	}

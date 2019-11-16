@@ -1,6 +1,7 @@
 const qs = require('qs')
 const { disk, getFolderName, getDiskResource2Levels } = require('./disk')
 const { megaplan } = require('./megaplan')
+const { process } = require('./amo')
 
 // const deal = {
 // 	id: "164837",
@@ -61,20 +62,25 @@ const upsertDealMpProject = async deal => {
     const { status, data } = await megaplan(
       'POST',
       '/BumsProjectApiV01/Project/create.api?' + qs.stringify({
-        Name: composeDealName(deal),
-        Responsible: 1000005,
-        SuperProject: 1000034
+        Model: {
+          Name: composeDealName(deal),
+          Responsible: 1000005,
+          SuperProject: 1000034
+        }
       }, { encodeValuesOnly: true })
     )
     console.log('data.project.Id > ', data.project.Id)
   }
-
   // const mpIdCustomField = deal.custom_fields.find(cf => cf.name === 'mpId')
+}
 
+const deleteDealMpProject = async deal => {
+  await process()
 }
 
 module.exports = { 
   upsertDealDiskFolder,
   deleteDealDiskFolder,
-  upsertDealMpProject
+  upsertDealMpProject,
+  deleteDealMpProject
 }
