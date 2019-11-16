@@ -1,5 +1,6 @@
 const qs = require('qs')
 const { disk, getFolderName, getDiskResource2Levels } = require('./disk')
+const { megaplan } = require('./megaplan')
 
 // const deal = {
 // 	id: "164837",
@@ -18,11 +19,15 @@ const { disk, getFolderName, getDiskResource2Levels } = require('./disk')
 
 const dealsDirPath = '/Заявки ХОНИНГОВАНИЕ.РУ'
 
+const composeDealName = deal => {
+  const localCreatedDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
+  return `${localCreatedDate}_${deal.name}_${deal.id}`
+}
+
 const upsertDealDiskFolder = async deal => {
   const resource = await getDiskResource2Levels(dealsDirPath, deal.id)
   const newStatusFolderName = await getFolderName(dealsDirPath, deal.status_id)
-  const localCreatedDate = new Date(parseInt(deal.date_create + '000', 10)+180*60000).toISOString().slice(0,10)
-  const newPath = `${dealsDirPath}/${newStatusFolderName}/${localCreatedDate}_${deal.name}_${deal.id}`
+  const newPath = `${dealsDirPath}/${newStatusFolderName}/${composeDealName(deal)}`
   if (!resource) {
     const { statusText: createFolderStatusText } = await disk.put('?'+
       qs.stringify({
@@ -51,7 +56,25 @@ const deleteDealDiskFolder = async deal => {
   console.log('deleteFolderStatusText > ', deleteFolderStatusText)
 }
 
+const upsertDealMpProject = async deal => {
+  if (!deal.custom_fields) {
+    const { status, data } = await megaplan(
+      'POST',
+      '/BumsProjectApiV01/Project/create.api?' + qs.stringify({
+        Name: composeDealName(deal),
+        Responsible: 1000005,
+        SuperProject: 1000034
+      }, { encodeValuesOnly: true })
+    )
+    console.log('data.project.Id > ', data.project.Id)
+  }
+
+  // const mpIdCustomField = deal.custom_fields.find(cf => cf.name === 'mpId')
+
+}
+
 module.exports = { 
   upsertDealDiskFolder,
-  deleteDealDiskFolder
+  deleteDealDiskFolder,
+  upsertDealMpProject
 }
