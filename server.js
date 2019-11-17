@@ -4,7 +4,7 @@ require('dotenv').config()
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
-const { upsertDealDiskFolder, deleteDealDiskFolder, upsertDealMpProject, deleteDealMpProject } = require('./src/lead')
+const { checkDealChanges, upsertDealDiskFolder, deleteDealDiskFolder, upsertDealMpProject, deleteDealMpProject } = require('./src/lead')
 
 app.get('/', (req, res) => {
 	res.send('Hello World!')
@@ -18,9 +18,10 @@ app.post('/lead/update', async (req, res) => {
 			: req.body.leads.update[0]
 		console.log('/lead/update deal > ', deal)
 		// await upsertDealDiskFolder(deal)
+		const upsertInfo = await checkDealChanges(deal)
 		await Promise.all([
-			upsertDealDiskFolder(deal),
-			upsertDealMpProject(deal)
+			upsertDealDiskFolder(deal, upsertInfo),
+			upsertDealMpProject(deal, upsertInfo)
 		])
 	} catch (err) {
 		console.log('app.post(/lead/update) caught err.message > ', err.message)

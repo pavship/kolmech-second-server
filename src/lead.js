@@ -25,26 +25,37 @@ const composeDealName = deal => {
   return `${localCreatedDate}_${deal.name}_${deal.id}`
 }
 
-const upsertDealDiskFolder = async deal => {
+const getDealMpId = deal => {
+  const mpIdCustomField = deal.custom_fields.find(cf => cf.name === 'mpId')
+  return mpIdCustomField ? mpIdCustomField.values.value : undefined
+}
+
+const checkDealChanges = async deal => {
   const resource = await getDiskResource2Levels(dealsDirPath, deal.id)
   const newStatusFolderName = await getFolderName(dealsDirPath, deal.status_id)
-  const newPath = `${dealsDirPath}/${newStatusFolderName}/${composeDealName(deal)}`
-  if (!resource) {
+  const newName = composeDealName(deal)
+  const newPath = `${dealsDirPath}/${newStatusFolderName}/${newName}`
+  return {
+    oldPath: resource ? resource.path : undefined,
+    newPath,
+    newName
+  }
+}
+
+const upsertDealDiskFolder = async (deal, { oldPath, newPath }) => {
+  if (!oldPath) {
     const { statusText: createFolderStatusText } = await disk.put('?'+
-      qs.stringify({
-        path: newPath,
-      })
+      qs.stringify({ path: newPath })
     )
     console.log('createFolderStatusText > ', createFolderStatusText)
     return
   }
-  const { statusText: renameFolderStatusText } = await disk.post('/move?'+
-    qs.stringify({
-      from: resource.path,
-      path: newPath,
-    })
-  )
-  console.log('renameFolderStatusText > ', renameFolderStatusText)
+  if (oldPath !== newPath) {
+    const { statusText: moveFolderStatusText } = await disk.post('/move?'+
+      qs.stringify({ from: oldPath, path: newPath })
+    )
+    console.log('moveFolderStatusText > ', moveFolderStatusText)
+  }
 }
 
 const deleteDealDiskFolder = async deal => {
@@ -57,30 +68,59 @@ const deleteDealDiskFolder = async deal => {
   console.log('deleteFolderStatusText > ', deleteFolderStatusText)
 }
 
-const upsertDealMpProject = async deal => {
-  if (!deal.custom_fields) {
+const upsertDealMpProject = async (deal, { oldPath, newPath, newName }) => {
+  if (!oldPath) {
     const { status, data } = await megaplan(
       'POST',
       '/BumsProjectApiV01/Project/create.api?' + qs.stringify({
         Model: {
-          Name: composeDealName(deal),
+          Name: newName,
           Responsible: 1000005,
           SuperProject: 1000034
         }
       }, { encodeValuesOnly: true })
     )
-    console.log('data.project.Id > ', data.project.Id)
+    const { data: amoRes } = await (await amoConnect())
+      .post('/api/v2/leads', {
+        update: [{
+          id: deal.id,
+          updated_at: Math.round(Date.now()/1000),
+          custom_fields: [{
+            id: "666773",
+            values: [{ value: data.project.Id }]
+          }]
+        }]
+      })
+    return
   }
-  // const mpIdCustomField = deal.custom_fields.find(cf => cf.name === 'mpId')
+  if (oldPath !== newPath) {
+    const mpId = getDealMpId(deal)
+    const { status } = await megaplan(
+      'POST',
+      '/BumsProjectApiV01/Project/edit.api?' + qs.stringify({
+        Id: mpId,
+        Model: {
+          Name: newName,
+        }
+      }, { encodeValuesOnly: true })
+    )
+    console.log('megaplan project edit status > ', status)
+  }
 }
 
 const deleteDealMpProject = async deal => {
-  const { data: {_embedded: { items: [ company ] }}} = await (await amoConnect())
-    .get(`api/v2/companies?id=${'66968371'}`)
-  console.log('company > ', company)
+  const mpId = getDealMpId(deal)
+  const { status, data } = await megaplan(
+    'POST',
+    '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
+      Id: mpId,
+      Action: 'act_delete'
+    }, { encodeValuesOnly: true })
+  )
 }
 
-module.exports = { 
+module.exports = {
+  checkDealChanges,
   upsertDealDiskFolder,
   deleteDealDiskFolder,
   upsertDealMpProject,
