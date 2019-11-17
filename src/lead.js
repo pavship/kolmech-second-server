@@ -1,7 +1,7 @@
 const qs = require('qs')
 const { disk, getFolderName, getDiskResource2Levels } = require('./disk')
 const { megaplan } = require('./megaplan')
-const { process } = require('./amo')
+const { amoConnect } = require('./amo')
 
 // const deal = {
 // 	id: "164837",
@@ -75,7 +75,9 @@ const upsertDealMpProject = async deal => {
 }
 
 const deleteDealMpProject = async deal => {
-  await process()
+  const { data: {_embedded: { items: [ company ] }}} = await (await amoConnect())
+    .get(`api/v2/companies?id=${'66968371'}`)
+  console.log('company > ', company)
 }
 
 module.exports = { 
