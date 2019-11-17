@@ -37,6 +37,7 @@ const checkDealChanges = async deal => {
   const newPath = `${dealsDirPath}/${newStatusFolderName}/${newName}`
   return {
     oldPath: resource ? resource.path : undefined,
+    diskChildren: resource ? resource.children : [],
     newPath,
     newName
   }
@@ -58,12 +59,10 @@ const upsertDealDiskFolder = async (deal, { oldPath, newPath }) => {
   }
 }
 
-const deleteDealDiskFolder = async deal => {
-  const resource = await getDiskResource2Levels(dealsDirPath, deal.id)
-  if (!resource) return console.log('Не найдена папка сделки # ' + deal.id)
-  const { path, children } = resource
+const deleteDealDiskFolder = async (deal, { oldPath, diskChildren }) => {
+  if (!oldPath) return console.log('Не найдена папка сделки # ' + deal.id)
   const { statusText: deleteFolderStatusText } = await disk.delete('?'+
-    qs.stringify({ path, permanently: !children.length })
+    qs.stringify({ oldPath, permanently: !diskChildren.length })
   )
   console.log('deleteFolderStatusText > ', deleteFolderStatusText)
 }
@@ -75,6 +74,7 @@ const upsertDealMpProject = async (deal, { oldPath, newPath, newName }) => {
       '/BumsProjectApiV01/Project/create.api?' + qs.stringify({
         Model: {
           Name: newName,
+          AmoID: deal.id,
           Responsible: 1000005,
           SuperProject: 1000034
         }
@@ -109,14 +109,24 @@ const upsertDealMpProject = async (deal, { oldPath, newPath, newName }) => {
 }
 
 const deleteDealMpProject = async deal => {
-  const mpId = getDealMpId(deal)
-  const { status, data } = await megaplan(
-    'POST',
-    '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
-      Id: mpId,
-      Action: 'act_delete'
+  // const { data: {_embedded: { items: [ dealFull ] }}} = await (await amoConnect())
+  //   .get(`/api/v2/leads?id=${deal.id}`)
+  // const mpId = getDealMpId(dealFull)
+
+  const { data } = await megaplan(
+    'GET',
+    '/BumsProjectApiV01/Project/list.api?' + qs.stringify({
+      Search: deal.id
     }, { encodeValuesOnly: true })
   )
+  console.log('data > ', data)
+  // const { status, data } = await megaplan(
+  //   'POST',
+  //   '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
+  //     Id: mpId,
+  //     Action: 'act_delete'
+  //   }, { encodeValuesOnly: true })
+  // )
 }
 
 module.exports = {
