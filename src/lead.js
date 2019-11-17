@@ -112,21 +112,19 @@ const deleteDealMpProject = async deal => {
   // const { data: {_embedded: { items: [ dealFull ] }}} = await (await amoConnect())
   //   .get(`/api/v2/leads?id=${deal.id}`)
   // const mpId = getDealMpId(dealFull)
-
-  const { data } = await megaplan(
+  const { data: { projects: [{ Id: mpId }]} } = await megaplan(
     'GET',
     '/BumsProjectApiV01/Project/list.api?' + qs.stringify({
       Search: deal.id
     }, { encodeValuesOnly: true })
   )
-  console.log('data > ', data)
-  // const { status, data } = await megaplan(
-  //   'POST',
-  //   '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
-  //     Id: mpId,
-  //     Action: 'act_delete'
-  //   }, { encodeValuesOnly: true })
-  // )
+  const { status, data } = await megaplan(
+    'POST',
+    '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
+      Id: mpId,
+      Action: 'act_delete'
+    }, { encodeValuesOnly: true })
+  )
 }
 
 module.exports = {

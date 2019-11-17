@@ -17,7 +17,6 @@ app.post('/lead/update', async (req, res) => {
 			? req.body.leads.add[0]
 			: req.body.leads.update[0]
 		console.log('/lead/update deal > ', deal)
-		// await upsertDealDiskFolder(deal)
 		const upsertInfo = await checkDealChanges(deal)
 		await Promise.all([
 			upsertDealDiskFolder(deal, upsertInfo),
@@ -33,9 +32,9 @@ app.post('/lead/delete', async (req, res) => {
 		res.status(200).send('Request handled')
 		const deal = req.body.leads.delete[0]
 		console.log('/lead/delete deal > ', deal)
-		// await deleteDealDiskFolder(deal)
+		const upsertInfo = await checkDealChanges(deal)
 		await Promise.all([
-			deleteDealDiskFolder(deal),
+			deleteDealDiskFolder(deal, upsertInfo),
 			deleteDealMpProject(deal)
 		])
 	} catch (err) {
