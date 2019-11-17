@@ -116,10 +116,10 @@ const upsertDealMpProject = async (deal, { oldPath, oldName, oldStatus, newPath,
         'POST',
         '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
           Id: mpId,
-          Action: 'act_accept_work'
+          Action: 'act_done'
         })
       )
-      console.log('megaplan project act_accept_work status > ', status)
+      console.log('megaplan project act_done status > ', status)
     }
     if (deal.status_id === '143') {
       const { status } = await megaplan(
