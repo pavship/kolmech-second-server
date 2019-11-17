@@ -32,9 +32,8 @@ app.post('/lead/delete', async (req, res) => {
 		res.status(200).send('Request handled')
 		const deal = req.body.leads.delete[0]
 		console.log('/lead/delete deal > ', deal)
-		const upsertInfo = await checkDealChanges(deal)
 		await Promise.all([
-			deleteDealDiskFolder(deal, upsertInfo),
+			deleteDealDiskFolder(deal),
 			deleteDealMpProject(deal)
 		])
 	} catch (err) {

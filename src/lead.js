@@ -37,7 +37,6 @@ const checkDealChanges = async deal => {
   const newPath = `${dealsDirPath}/${newStatusFolderName}/${newName}`
   return {
     oldPath: resource ? resource.path : undefined,
-    diskChildren: resource ? resource.children : [],
     newPath,
     newName
   }
@@ -59,10 +58,11 @@ const upsertDealDiskFolder = async (deal, { oldPath, newPath }) => {
   }
 }
 
-const deleteDealDiskFolder = async (deal, { oldPath, diskChildren }) => {
-  if (!oldPath) return console.log('Не найдена папка сделки # ' + deal.id)
+const deleteDealDiskFolder = async (deal) => {
+  const { path, children } = await getDiskResource2Levels(dealsDirPath, deal.id)
+  if (!path) return console.log('Не найдена папка сделки # ' + deal.id)
   const { statusText: deleteFolderStatusText } = await disk.delete('?'+
-    qs.stringify({ oldPath, permanently: !diskChildren.length })
+    qs.stringify({ path, permanently: !children.length })
   )
   console.log('deleteFolderStatusText > ', deleteFolderStatusText)
 }
@@ -125,6 +125,7 @@ const deleteDealMpProject = async deal => {
       Action: 'act_delete'
     }, { encodeValuesOnly: true })
   )
+  console.log('status, data > ', status, data)
 }
 
 module.exports = {
