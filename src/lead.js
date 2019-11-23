@@ -27,9 +27,18 @@ const composeDealName = deal => {
   return `${localCreatedDate}_${deal.name}_${deal.id}`
 }
 
-const getDealMpId = deal => {
+const getDealMpId = async deal => {
   const mpIdCustomField = deal.custom_fields ? deal.custom_fields.find(cf => cf.name === 'mpId') : undefined
-  return mpIdCustomField ? mpIdCustomField.values[0].value : undefined
+  let mpId = mpIdCustomField ? mpIdCustomField.values[0].value : undefined
+  if (mpId) return mpId
+  const { data: { projects } } = await megaplan(
+    'GET',
+    '/BumsProjectApiV01/Project/list.api?' + qs.stringify({
+      Search: deal.id
+    }, { encodeValuesOnly: true })
+  )
+  if (!projects) console.log('Megaplan Project not found for AmoCRM Deal ' + deal.id)
+  return projects ? projects[0].Id : undefined
 }
 
 const checkDealChanges = async deal => {
@@ -74,13 +83,7 @@ const deleteDealDiskFolder = async (deal) => {
 }
 
 const upsertDealMpProject = async (deal, { oldPath, oldName, oldStatus, newPath, newName }) => {
-  // const mpId = getDealMpId(deal)
-  const { data: { projects: [{ Id: mpId }]} } = await megaplan(
-    'GET',
-    '/BumsProjectApiV01/Project/list.api?' + qs.stringify({
-      Search: deal.id
-    }, { encodeValuesOnly: true })
-  )
+  const mpId = await getDealMpId(deal)
   if (!oldPath && !mpId) {
     const { status, data } = await megaplan(
       'POST',
@@ -156,13 +159,7 @@ const upsertDealMpProject = async (deal, { oldPath, oldName, oldStatus, newPath,
 const deleteDealMpProject = async deal => {
   // const { data: {_embedded: { items: [ dealFull ] }}} = await (await amoConnect())
   //   .get(`/api/v2/leads?id=${deal.id}`)
-  // const mpId = getDealMpId(dealFull)
-  const { data: { projects: [{ Id: mpId }]} } = await megaplan(
-    'GET',
-    '/BumsProjectApiV01/Project/list.api?' + qs.stringify({
-      Search: deal.id
-    }, { encodeValuesOnly: true })
-  )
+  const mpId = await getDealMpId(deal)
   const { status } = await megaplan(
     'POST',
     '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
@@ -171,13 +168,6 @@ const deleteDealMpProject = async deal => {
     })
   )
   console.log('megaplan project delete status > ', status)
-  const { data } = await megaplan(
-    'GET',
-    '/BumsProjectApiV01/Project/card.api?' + qs.stringify({
-      Id: 55
-    })
-  )
-  console.log('megaplan project 55 data > ', data)
 }
 
 const upsertMpProjectKolmechRecord = async project => {
@@ -186,22 +176,25 @@ const upsertMpProjectKolmechRecord = async project => {
     for (let i = 93; i < 369; i + 10) {
       ar.push(i)
     }
+    console.log('ar > ', ar)
     for (let num of ar) {
       const nums = []
       for (let i = 0; i < 10; i++) {
         nums[i] = i + num
       }
-      const statuses = await Promise.all(nums.map(async mpId => {
-        const { status } = await megaplan(
-          'POST',
-          '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
-            Id: mpId,
-            Action: 'act_delete'
-          })
-        )
-        return mpId + ' ' + status
-      }))
-      console.log(num + 'statuses > ', statuses)
+      // const statuses = await Promise.all(nums.map(async mpId => {
+      //   const { status } = await megaplan(
+      //     'POST',
+      //     '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
+      //       Id: mpId,
+      //       Action: 'act_delete'
+      //     })
+      //   )
+      //   return mpId + ' ' + status
+      // }))
+      console.log('num > ', num)
+      console.log('nums > ', nums)
+      // console.log(num + 'statuses > ', statuses)
     }
     console.log('megaplan project delete status > ', status)
   } catch (err) {
