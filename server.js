@@ -4,7 +4,14 @@ require('dotenv').config()
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
-const { checkDealChanges, upsertDealDiskFolder, deleteDealDiskFolder, upsertDealMpProject, deleteDealMpProject } = require('./src/lead')
+const {
+	checkDealChanges, 
+	upsertDealDiskFolder, 
+	deleteDealDiskFolder, 
+	upsertDealMpProject, 
+	deleteDealMpProject,
+	upsertMpProjectKolmechRecord
+} = require('./src/lead')
 
 app.get('/', (req, res) => {
 	res.send('Hello World!')
@@ -40,6 +47,25 @@ app.post('/lead/delete', async (req, res) => {
 		console.log('app.post(/lead/delete) caught err.message > ', err.message)
 	}
 })
+
+app.post('/megaplan', async (req, res) => {
+	try {
+		res.status(200).send('Request handled')
+		const {
+			data,
+			model,
+			event
+		} = req.body
+		console.log('/megaplan model, event, data.id > ', model, event, data.id)
+		if (model === 'Project' && ['on_after_create', 'on_after_update', 'on_after_drop'].includes(event)) {
+			await upsertMpProjectKolmechRecord(data)
+		}
+	} catch (err) {
+		console.log('app.post(/megaplan) caught err.message > ', err.message)
+	}
+})
+
+upsertMpProjectKolmechRecord({id: 1})
 
 const port = process.env.PORT || 8000
 app.listen(port, () => {
