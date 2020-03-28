@@ -37,8 +37,8 @@ const getDealMpId = async deal => {
       Search: deal.id
     }, { encodeValuesOnly: true })
   )
-  if (!projects) console.log('Megaplan Project not found for AmoCRM Deal ' + deal.id)
-  return projects ? projects[0].Id : undefined
+  if (!projects.length) console.log('Megaplan Project not found for AmoCRM Deal ' + deal.id)
+  return projects.length ? projects[0].Id : undefined
 }
 
 const checkDealChanges = async deal => {

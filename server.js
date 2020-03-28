@@ -10,8 +10,9 @@ const {
 	deleteDealDiskFolder, 
 	upsertDealMpProject, 
 	deleteDealMpProject,
-	upsertMpProjectKolmechRecord
 } = require('./src/lead')
+
+let lastUpdatedDeal = {}
 
 app.get('/', (req, res) => {
 	res.send('Hello World!')
@@ -24,6 +25,9 @@ app.post('/lead/update', async (req, res) => {
 			? req.body.leads.add[0]
 			: req.body.leads.update[0]
 		console.log('/lead/update deal > ', deal)
+		if (deal.id === lastUpdatedDeal.id && deal.updated_at - lastUpdatedDeal.created_at < 10)
+			return console.log(`deal ${deal.id} update handling skipped as duplicated event`)
+		lastUpdatedDeal = deal
 		const upsertInfo = await checkDealChanges(deal)
 		await Promise.all([
 			upsertDealDiskFolder(deal, upsertInfo),
@@ -48,6 +52,8 @@ app.post('/lead/delete', async (req, res) => {
 	}
 })
 
+var status = {}
+
 app.post('/megaplan', async (req, res) => {
 	try {
 		res.status(200).send('Request handled')
@@ -57,9 +63,12 @@ app.post('/megaplan', async (req, res) => {
 			event
 		} = req.body
 		console.log('/megaplan model, event, data.id > ', model, event, data.id)
-		// if (model === 'Project' && ['on_after_create', 'on_after_update', 'on_after_drop'].includes(event)) {
-		// 	await upsertMpProjectKolmechRecord(data)
-		// }
+		// require('fs').writeFileSync('output.json', JSON.stringify(req.body, null, 2))
+		status = {
+			name: data.status,
+			changeTime: data.statusChangeTime.value
+		}
+		console.log('status > ', status)
 	} catch (err) {
 		console.log('app.post(/megaplan) caught err.message > ', err.message)
 	}
