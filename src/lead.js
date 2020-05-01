@@ -4,6 +4,7 @@ const { disk, getFolderName, getDiskResource2Levels } = require('./disk')
 const { megaplan } = require('./megaplan')
 const { kolmech } = require('./kolmech')
 const { amoConnect } = require('./amo')
+const { mail } = require('./mail')
 
 // const deal = {
 // 	id: "164837",
@@ -58,6 +59,9 @@ const checkDealChanges = async deal => {
 }
 
 const upsertDealDiskFolder = async (deal, { oldPath, newPath }) => {
+
+  mail('sdf')
+
   if (!oldPath) {
     const { statusText: createFolderStatusText } = await disk.put('?'+
       qs.stringify({ path: newPath })
