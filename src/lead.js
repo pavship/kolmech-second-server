@@ -1,6 +1,6 @@
 const qs = require('qs')
 const gql = require('graphql-tag')
-const { disk, getFolderName, getDiskResource2Levels } = require('./disk')
+const { disk, getFolderName, getDiskResource2Levels, upload } = require('./disk')
 const { megaplan } = require('./megaplan')
 const { kolmech } = require('./kolmech')
 const { amoConnect } = require('./amo')
@@ -38,8 +38,15 @@ const getDealMpId = async deal => {
       Search: deal.id
     }, { encodeValuesOnly: true })
   )
-  if (!projects.length) console.log('Megaplan Project not found for AmoCRM Deal ' + deal.id)
-  return projects.length ? projects[0].Id : undefined
+  return projects.length
+    ? projects[0].Id
+    : console.log('Megaplan Project not found for AmoCRM Deal ' + deal.id) || undefined
+}
+
+const getDealNotes = async deal => {
+  const { data: { _embedded: { items: notes } } } = await (await amoConnect())
+    .get('/api/v2/notes?type=lead&element_id=' + deal.id)
+  return notes
 }
 
 const checkDealChanges = async deal => {
@@ -59,17 +66,13 @@ const checkDealChanges = async deal => {
 }
 
 const upsertDealDiskFolder = async (deal, { oldPath, newPath }) => {
-
-  mail('sdf')
-
   if (!oldPath) {
     const { statusText: createFolderStatusText } = await disk.put('?'+
       qs.stringify({ path: newPath })
     )
     console.log('createFolderStatusText > ', createFolderStatusText)
-    return
   }
-  if (oldPath !== newPath) {
+  if (oldPath && oldPath !== newPath) {
     const { statusText: moveFolderStatusText } = await disk.post('/move?'+
       qs.stringify({ from: oldPath, path: newPath })
     )
@@ -84,6 +87,23 @@ const deleteDealDiskFolder = async (deal) => {
     qs.stringify({ path, permanently: !children.length })
   )
   console.log('deleteFolderStatusText > ', deleteFolderStatusText)
+}
+
+const downloadMailAttachments = async (deal, { oldPath, newPath }) => {
+  console.log('downloadMailAttachments > ')
+  const lastEmail = (await getDealNotes(deal))
+    .filter(note => note.note_type === 15)
+    .pop()
+  console.log('lastEmail > ', lastEmail)
+  if (!lastEmail) return console.log('downloadMailAttachments > deal emails not found')
+  const { from, to, attach_cnt, delivery: { time } } = lastEmail.params
+  if (!attach_cnt) return console.log('downloadMailAttachments > deal lastEmail has no attachments')
+  const attachments = await mail(to.email, from.email, time)
+  // setTimeout(async () => {
+  // 	await Promise.all(attachments.map(att => upload(newPath + '/' + att.filename, att.data)))  
+  // }, 5000)
+  await Promise.all(attachments.map(att => upload(newPath + '/' + att.filename, att.data)))  
+
 }
 
 const upsertDealMpProject = async (deal, { oldPath, oldName, oldStatus, newPath, newName }) => {
@@ -146,7 +166,6 @@ const upsertDealMpProject = async (deal, { oldPath, oldName, oldStatus, newPath,
       )
       console.log('megaplan project act_expire (fail project) status > ', status)
     }
-    console.log('oldStatus > ', oldStatus)
     if (['142', '143'].includes(oldStatus) && !['142', '143'].includes(deal.status_id)) {
       const { status } = await megaplan(
         'POST',
@@ -174,45 +193,11 @@ const deleteDealMpProject = async deal => {
   console.log('megaplan project delete status > ', status)
 }
 
-const upsertMpProjectKolmechRecord = async project => {
-  try {
-    const ar = []
-    for (let i = 93; i < 369; i + 10) {
-      ar.push(i)
-    }
-    console.log('ar > ', ar)
-    for (let num of ar) {
-      const nums = []
-      for (let i = 0; i < 10; i++) {
-        nums[i] = i + num
-      }
-      // const statuses = await Promise.all(nums.map(async mpId => {
-      //   const { status } = await megaplan(
-      //     'POST',
-      //     '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
-      //       Id: mpId,
-      //       Action: 'act_delete'
-      //     })
-      //   )
-      //   return mpId + ' ' + status
-      // }))
-      console.log('num > ', num)
-      console.log('nums > ', nums)
-      // console.log(num + 'statuses > ', statuses)
-    }
-    console.log('megaplan project delete status > ', status)
-  } catch (err) {
-    console.log('err > ', err)
-    
-  }
-
-}
-
 module.exports = {
   checkDealChanges,
   upsertDealDiskFolder,
   deleteDealDiskFolder,
+  downloadMailAttachments,
   upsertDealMpProject,
-  deleteDealMpProject,
-  upsertMpProjectKolmechRecord
+  deleteDealMpProject
 }

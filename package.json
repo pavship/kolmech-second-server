@@ -1,6 +1,6 @@
 {
   "name": "kolmech-second-server",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "kolmech aux server orchestrating API services",
   "main": "server.js",
   "repository": "https://github.com/pavship/kolmech-second-server.git",
