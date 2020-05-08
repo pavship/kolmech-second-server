@@ -26,19 +26,20 @@ app.post('/lead/update', async (req, res) => {
 			? req.body.leads.add[0]
 			: req.body.leads.update[0]
 		console.log('/lead/update deal > ', deal)
-		const upsertInfo = await checkDealChanges(deal)
-		if (deal.id === lastUpdatedDeal.id && deal.updated_at - lastUpdatedDeal.created_at < 10)
-			console.log(`deal ${deal.id} update handling skipped as duplicated event`)
-		else
+		if (deal.id === lastUpdatedDeal.id && deal.updated_at - lastUpdatedDeal.created_at < 10 && !deal.link_changed)
+		console.log(`deal ${deal.id} update handling skipped as duplicated event`)
+		else {
+			lastUpdatedDeal = deal
+			const upsertInfo = await checkDealChanges(deal)
+			if (deal.link_changed)
+				return setTimeout(async () => {
+					await downloadMailAttachments(deal, upsertInfo)
+				}, 5000)
 			await Promise.all([
 				upsertDealDiskFolder(deal, upsertInfo),
 				upsertDealMpProject(deal, upsertInfo)
 			])
-		lastUpdatedDeal = deal
-		if (deal.link_changed)
-			setTimeout(async () => {
-				await downloadMailAttachments(deal, upsertInfo)
-			}, 5000)
+		}
 	} catch (err) {
 		console.log('app.post(/lead/update) caught err.message > ', err.message)
 	}

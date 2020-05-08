@@ -1,6 +1,6 @@
 const axios = require('axios')
 const qs = require('qs')
-const { telegram } = require('./telegram')
+const { sendDevMessage } = require('./telegram')
 
 const disk = axios.create({
 	baseURL: 'https://cloud-api.yandex.net/v1/disk/resources',
@@ -71,10 +71,11 @@ const getDiskResource2Levels = async (path, id) => {
 }
 
 const getResourceUploadUrl = async (path, overwrite = true) => {
+	console.log('getResourceUploadUrl > path > ', path)
 	try {
 		const { data: { href }} = await disk.get('/upload?'+
 			qs.stringify({ path, overwrite }))
-		console.log('download href > ', href)
+		console.log('upload href > ', href)
 		return href
 	} catch (err) {
 		console.log('disk > getResourceUploadUrl error')
@@ -90,14 +91,11 @@ const upload = async (path, buffer) => {
 		)
 	} catch (err) {
 		console.log('disk > upload error for path > ', path)
-		telegram.post(`sendMessage?chat_id${process.env.TELEGRAM_DEV_CHAT_ID}&text=
-			kolmech-second-server > disk > upload error for path >
-			${path}
-		`)
+		// sendDevMessage(`kolmech-second-server > disk > upload error for path > ${path}`)
 	}
 }
 
-module.exports = { 
+module.exports = {
   disk,
   getDiskResources,
   getFolderName,

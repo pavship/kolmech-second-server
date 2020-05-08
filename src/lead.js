@@ -40,7 +40,7 @@ const getDealMpId = async deal => {
   )
   return projects.length
     ? projects[0].Id
-    : console.log('Megaplan Project not found for AmoCRM Deal ' + deal.id) || undefined
+    : console.log('getDealMpId > no megaplan.ru project for deal id ' + deal.id) || undefined
 }
 
 const getDealNotes = async deal => {
@@ -99,11 +99,7 @@ const downloadMailAttachments = async (deal, { oldPath, newPath }) => {
   const { from, to, attach_cnt, delivery: { time } } = lastEmail.params
   if (!attach_cnt) return console.log('downloadMailAttachments > deal lastEmail has no attachments')
   const attachments = await mail(to.email, from.email, time)
-  // setTimeout(async () => {
-  // 	await Promise.all(attachments.map(att => upload(newPath + '/' + att.filename, att.data)))  
-  // }, 5000)
   await Promise.all(attachments.map(att => upload(newPath + '/' + att.filename, att.data)))  
-
 }
 
 const upsertDealMpProject = async (deal, { oldPath, oldName, oldStatus, newPath, newName }) => {
