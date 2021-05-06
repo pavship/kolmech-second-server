@@ -10,10 +10,20 @@ const honingAccounting = axios.create({
 })
 
 const sendTaskToFlow = async task => {
-	const res = await honingAccounting.post({
-		hello: 'world'
+	const {
+		data: {
+			id,
+			responsible,
+			Category130CustomFieldPlanovieZatrati
+	 	}
+	} = task
+	await honingAccounting.post('', {
+		data: {
+			id,
+			responsible,
+			Category130CustomFieldPlanovieZatrati
+		}
 	})
-	console.log('res > ', res)
 }
 
 module.exports = {

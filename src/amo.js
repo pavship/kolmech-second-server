@@ -31,7 +31,14 @@ const amoConnect = async () => {
   return Amo
 }
 
+const findAmoContact = async text => {
+  const { data: { _embedded: { items: contacts } } } = await (await amoConnect())
+    .get('/api/v2/contacts?query=' + text)
+  return contacts.length ? contacts[0] : null
+}
+
 
 module.exports = {
-  amoConnect
+  amoConnect,
+  findAmoContact
 }

@@ -83,6 +83,25 @@ app.post('/megaplan', async (req, res) => {
 	}
 })
 
+app.use(basicAuth({
+  users: { 'admin': process.env.ADMIN_PASSWORD }
+}))
+
+app.get('/contacts', async(req, res) => {
+  // TODO log client ip
+  console.log('-> incoming request from ip: ', req.headers['x-forwarded-for'] || req.connection.remoteAddress, ' -> /contacts')
+  console.log('-> user: ', req.auth.user)
+  try {
+    const contact = await findAmoContact(req.query.name)
+    res.send({ contact })
+  } catch (err) {
+    res.status(500).send({
+      message: 'Kolmech second server error!'
+    })
+    console.log('/contacts error > ', err)
+  }
+})
+
 const port = process.env.PORT || 8000
 app.listen(port, () => {
 	console.log(`Listening on port ${port}!...`)
