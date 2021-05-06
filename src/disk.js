@@ -1,6 +1,6 @@
 const axios = require('axios')
 const qs = require('qs')
-const { sendDevMessage } = require('./telegram')
+// const { sendDevMessage } = require('./telegram')
 
 const disk = axios.create({
 	baseURL: 'https://cloud-api.yandex.net/v1/disk/resources',
@@ -79,6 +79,7 @@ const getResourceUploadUrl = async (path, overwrite = true) => {
 		return href
 	} catch (err) {
 		console.log('disk > getResourceUploadUrl error')
+		console.log('err > ', err)
 	}
 }
 

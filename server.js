@@ -12,6 +12,7 @@ const {
 	deleteDealMpProject,
 	downloadMailAttachments,
 } = require('./src/lead')
+const { sendTaskToFlow } = require('./src/flow')
 
 let lastUpdatedDeal = {}
 
@@ -76,6 +77,7 @@ app.post('/megaplan', async (req, res) => {
 			changeTime: data.statusChangeTime.value
 		}
 		console.log('status > ', status)
+		if (model === 'Task') await sendTaskToFlow(req.body)
 	} catch (err) {
 		console.log('app.post(/megaplan) caught err.message > ', err.message)
 	}

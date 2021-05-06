@@ -33,6 +33,7 @@ const mail = async (user, from, time) => {
     markSeen: false
   }
   const messages = await connection.search(searchCriteria, fetchOptions)
+  console.log('messages > ', messages)
   const message = messages.find(m => m.attributes.date.toISOString() === on)
   // console.log('message.attributes > ', JSON.stringify(message.attributes, null, 2))
   // console.log('message.attributes.struct > ', JSON.stringify(message.attributes.struct, null, 2))
@@ -45,7 +46,7 @@ const mail = async (user, from, time) => {
   
   const attachments = []
   const parts = imaps.getParts(message.attributes.struct)
-  // console.log('parts > ', JSON.stringify(parts, null, 2))
+  console.log('parts > ', JSON.stringify(parts, null, 2))
   for (const part of parts) {
     if (!(part.disposition && part.disposition.type.toUpperCase === 'ATTACHMENT') && part.type.toUpperCase() !== 'IMAGE') continue  // use this line to download images embedded into message
     // if (!(part.disposition && part.disposition.type.toUpperCase === 'ATTACHMENT')) continue
