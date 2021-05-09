@@ -1,4 +1,5 @@
 const express = require('express')
+const basicAuth = require('express-basic-auth')
 const app = express()
 require('dotenv').config()
 app.use(express.json())
@@ -12,7 +13,7 @@ const {
 	deleteDealMpProject,
 	downloadMailAttachments,
 } = require('./src/lead')
-const { sendTaskToFlow } = require('./src/flow')
+const { findAmoContact } = require('./src/amo')
 
 let lastUpdatedDeal = {}
 
@@ -77,7 +78,6 @@ app.post('/megaplan', async (req, res) => {
 			changeTime: data.statusChangeTime.value
 		}
 		console.log('status > ', status)
-		if (model === 'Task') await sendTaskToFlow(req.body)
 	} catch (err) {
 		console.log('app.post(/megaplan) caught err.message > ', err.message)
 	}
@@ -106,5 +106,3 @@ const port = process.env.PORT || 8000
 app.listen(port, () => {
 	console.log(`Listening on port ${port}!...`)
 })
-
-
