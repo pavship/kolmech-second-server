@@ -97,7 +97,6 @@ app.use(basicAuth({
 }))
 
 app.get('/contacts', async(req, res) => {
-	// TODO log client ip
 	console.log('-> incoming request from ip: ', req.headers['x-forwarded-for'] || req.connection.remoteAddress, ' -> /contacts')
 	console.log('-> user: ', req.auth.user)
 	try {
@@ -117,7 +116,6 @@ app.get('/contacts', async(req, res) => {
 })
 
 app.get('/tasks', async(req, res) => {
-	// TODO log client ip
 	console.log('-> incoming request from ip: ', req.headers['x-forwarded-for'] || req.connection.remoteAddress, ' -> /tasks')
 	console.log('-> user: ', req.auth.user)
 	try {
@@ -127,7 +125,7 @@ app.get('/tasks', async(req, res) => {
 		res.status(500).send({
 			message: 'Kolmech second server error!'
 		})
-		console.log('/contacts error > ', err)
+		console.log('/tasks error > ', err)
 	}
 })
 
