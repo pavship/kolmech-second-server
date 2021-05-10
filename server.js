@@ -13,7 +13,8 @@ const {
 	deleteDealMpProject,
 	downloadMailAttachments,
 } = require('./src/lead')
-const { findAmoContact } = require('./src/amo')
+const { getAllTasksV3 } = require('./src/task')
+const { findAmoContact, getAmoContacts } = require('./src/amo')
 
 let lastUpdatedDeal = {}
 
@@ -84,22 +85,50 @@ app.post('/megaplan', async (req, res) => {
 })
 
 app.use(basicAuth({
-  users: { 'admin': process.env.ADMIN_PASSWORD }
+	users: { 'admin': process.env.ADMIN_PASSWORD },
+	challenge: true,
+	unauthorizedResponse: req => {
+		const reason = req.auth
+			? ('Credentials ' + req.auth.user + ':<provided password> rejected')
+			: 'No credentials provided'
+		console.log('unauthorized access with reason > ', reason)
+		return reason
+	}
 }))
 
 app.get('/contacts', async(req, res) => {
-  // TODO log client ip
-  console.log('-> incoming request from ip: ', req.headers['x-forwarded-for'] || req.connection.remoteAddress, ' -> /contacts')
-  console.log('-> user: ', req.auth.user)
-  try {
-    const contact = await findAmoContact(req.query.name)
-    res.send({ contact })
-  } catch (err) {
-    res.status(500).send({
-      message: 'Kolmech second server error!'
-    })
-    console.log('/contacts error > ', err)
-  }
+	// TODO log client ip
+	console.log('-> incoming request from ip: ', req.headers['x-forwarded-for'] || req.connection.remoteAddress, ' -> /contacts')
+	console.log('-> user: ', req.auth.user)
+	try {
+		if (!!req.query.name) {
+			const contact = await findAmoContact(req.query.name)
+			res.send({ contact })
+		} else {
+			const contacts = await getAmoContacts()
+			res.send({ contacts })
+		}
+	} catch (err) {
+		res.status(500).send({
+			message: 'Kolmech second server error!'
+		})
+		console.log('/contacts error > ', err)
+	}
+})
+
+app.get('/tasks', async(req, res) => {
+	// TODO log client ip
+	console.log('-> incoming request from ip: ', req.headers['x-forwarded-for'] || req.connection.remoteAddress, ' -> /tasks')
+	console.log('-> user: ', req.auth.user)
+	try {
+		const tasks = await getAllTasksV3()
+		res.send({ tasks })
+	} catch (err) {
+		res.status(500).send({
+			message: 'Kolmech second server error!'
+		})
+		console.log('/contacts error > ', err)
+	}
 })
 
 const port = process.env.PORT || 8000
