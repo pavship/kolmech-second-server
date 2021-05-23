@@ -1,10 +1,8 @@
-const qs = require('qs')
-const gql = require('graphql-tag')
-const { disk, getFolderName, getDiskResource2Levels, upload } = require('./disk')
-const { megaplan } = require('./megaplan')
-const { kolmech } = require('./kolmech')
-const { amoConnect } = require('./amo')
-const { mail } = require('./mail')
+import { stringify } from 'qs'
+import { disk, getFolderName, getDiskResource2Levels, upload } from './disk'
+import { megaplan } from './megaplan'
+import { amoConnect } from './amo'
+import { mail } from './mail'
 
 // const deal = {
 // 	id: "164837",
@@ -34,7 +32,7 @@ const getDealMpId = async deal => {
   if (mpId) return mpId
   const { data: { projects } } = await megaplan(
     'GET',
-    '/BumsProjectApiV01/Project/list.api?' + qs.stringify({
+    '/BumsProjectApiV01/Project/list.api?' + stringify({
       Search: deal.id
     }, { encodeValuesOnly: true })
   )
@@ -68,13 +66,13 @@ const checkDealChanges = async deal => {
 const upsertDealDiskFolder = async (deal, { oldPath, newPath }) => {
   if (!oldPath) {
     const { statusText: createFolderStatusText } = await disk.put('?'+
-      qs.stringify({ path: newPath })
+      stringify({ path: newPath })
     )
     console.log('createFolderStatusText > ', createFolderStatusText)
   }
   if (oldPath && oldPath !== newPath) {
     const { statusText: moveFolderStatusText } = await disk.post('/move?'+
-      qs.stringify({ from: oldPath, path: newPath })
+      stringify({ from: oldPath, path: newPath })
     )
     console.log('moveFolderStatusText > ', moveFolderStatusText)
   }
@@ -84,7 +82,7 @@ const deleteDealDiskFolder = async (deal) => {
   const { path, children } = await getDiskResource2Levels(dealsDirPath, deal.id)
   if (!path) return console.log('Не найдена папка сделки # ' + deal.id)
   const { statusText: deleteFolderStatusText } = await disk.delete('?'+
-    qs.stringify({ path, permanently: !children.length })
+    stringify({ path, permanently: !children.length })
   )
   console.log('deleteFolderStatusText > ', deleteFolderStatusText)
 }
@@ -107,7 +105,7 @@ const upsertDealMpProject = async (deal, { oldPath, oldName, oldStatus, newPath,
   if (!oldPath && !mpId) {
     const { status, data } = await megaplan(
       'POST',
-      '/BumsProjectApiV01/Project/create.api?' + qs.stringify({
+      '/BumsProjectApiV01/Project/create.api?' + stringify({
         Model: {
           Name: newName,
           AmoID: deal.id,
@@ -133,7 +131,7 @@ const upsertDealMpProject = async (deal, { oldPath, oldName, oldStatus, newPath,
     if (oldName !== newName) {
       const { status } = await megaplan(
         'POST',
-        '/BumsProjectApiV01/Project/edit.api?' + qs.stringify({
+        '/BumsProjectApiV01/Project/edit.api?' + stringify({
           Id: mpId,
           Model: {
             Name: newName,
@@ -145,7 +143,7 @@ const upsertDealMpProject = async (deal, { oldPath, oldName, oldStatus, newPath,
     if (deal.status_id === '142') {
       const { status } = await megaplan(
         'POST',
-        '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
+        '/BumsProjectApiV01/Project/action.api?' + stringify({
           Id: mpId,
           Action: 'act_done'
         })
@@ -155,7 +153,7 @@ const upsertDealMpProject = async (deal, { oldPath, oldName, oldStatus, newPath,
     if (deal.status_id === '143') {
       const { status } = await megaplan(
         'POST',
-        '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
+        '/BumsProjectApiV01/Project/action.api?' + stringify({
           Id: mpId,
           Action: 'act_expire'
         })
@@ -165,7 +163,7 @@ const upsertDealMpProject = async (deal, { oldPath, oldName, oldStatus, newPath,
     if (['142', '143'].includes(oldStatus) && !['142', '143'].includes(deal.status_id)) {
       const { status } = await megaplan(
         'POST',
-        '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
+        '/BumsProjectApiV01/Project/action.api?' + stringify({
           Id: mpId,
           Action: 'act_renew'
         })
@@ -181,7 +179,7 @@ const deleteDealMpProject = async deal => {
   const mpId = await getDealMpId(deal)
   const { status } = await megaplan(
     'POST',
-    '/BumsProjectApiV01/Project/action.api?' + qs.stringify({
+    '/BumsProjectApiV01/Project/action.api?' + stringify({
       Id: mpId,
       Action: 'act_delete'
     })
@@ -189,7 +187,7 @@ const deleteDealMpProject = async deal => {
   console.log('megaplan project delete status > ', status)
 }
 
-module.exports = {
+export default {
   checkDealChanges,
   upsertDealDiskFolder,
   deleteDealDiskFolder,

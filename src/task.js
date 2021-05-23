@@ -1,25 +1,12 @@
-const { megaplan, megaplan_v3 } = require('./megaplan')
-// const { pgRequest } = require('./pg')
+import { megaplan, megaplan_v3 } from './megaplan'
 
 const getAllTasks = async() => {
-  const results = await Promise.all([0, 100, 200, 300, 400, 500, 600, 700].map(offset =>
-    megaplan(
-        'GET',
-        '/BumsTaskApiV01/Task/list.api?Limit=100&RequestedFields=[Id,Name]&Offset=' + offset
-      )
-  ))
-  const tasks = results.reduce((tasks, res) => [...tasks, ...res.data.tasks], [])
-  return tasks
-}
-
-const getAllTasksV3 = async() => {
-  let resultSetLength = 1
   let tasks = []
   let pageAfterId = 0
-  while (resultSetLength > 0) {
+  while (1 > 0) {
     const { data } = await megaplan_v3(
       'GET',
-      '/api/v3/task?{"fields":["parent"],"filter":{"id":352},"limit":100' + (pageAfterId ? `,"pageAfter":{"id":"${pageAfterId}","contentType":"Task"}` : '') + '}'
+      '/api/v3/task?{"filter":{"id":352},"limit":100' + (pageAfterId ? `,"pageAfter":{"id":"${pageAfterId}","contentType":"Task"}` : '') + '}' //"fields":["parent"],
     )
     if (!data.length) return tasks
     tasks = [...tasks, ...data]
@@ -36,6 +23,18 @@ const getOneTask = async() => {
   )
   return [task]
 }
+
+// // Deprecated legacy use V3
+// const getAllTasksV1 = async() => {
+//   const results = await Promise.all([0, 100, 200, 300, 400, 500, 600, 700].map(offset =>
+//     megaplan(
+//         'GET',
+//         '/BumsTaskApiV01/Task/list.api?Limit=100&RequestedFields=[Id,Name]&Offset=' + offset
+//       )
+//   ))
+//   const tasks = results.reduce((tasks, res) => [...tasks, ...res.data.tasks], [])
+//   return tasks
+// }
 
 // const trackTask = async(id, status) => {
 //   if (status.name === 'accepted') {
@@ -59,9 +58,8 @@ const getOneTask = async() => {
 //   return res.rows
 // }
 
-module.exports = { 
+export default { 
   getAllTasks,
-  getAllTasksV3,
   getOneTask,
   // trackTask,
   // getTaskLog

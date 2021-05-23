@@ -1,3 +1,9 @@
+# Tesseract
+*.traineddata
+
+# Test Files
+/output.*
+
 # Logs
 logs
 *.log

@@ -1,6 +1,6 @@
-const axios = require('axios')
-const crypto = require('crypto')
-const FormData = require('form-data')
+import { request } from 'axios'
+import { createHmac } from 'crypto'
+import FormData from 'form-data'
 
 const v3credentials = {
 	access_token: '',
@@ -16,7 +16,7 @@ const megaplan_v3 = async ( method, uri, data ) => {
 		form.append('grant_type', 'password')
 		const headers = form.getHeaders()
 		try {
-			const res = await axios.request({
+			const res = await request({
 				method: 'post',
 				url: 'https://' + process.env.MEGAPLAN_HOST + '/api/v3/auth/access_token',
 				headers,
@@ -30,7 +30,7 @@ const megaplan_v3 = async ( method, uri, data ) => {
 		}
 	}
 	try {
-		const res = await axios.request({
+		const res = await request({
 			method: method.toLowerCase(),
 			url: 'https://' + process.env.MEGAPLAN_HOST + uri,
 			headers: {
@@ -53,8 +53,7 @@ const megaplan = async ( method, uri, data ) => {
 	const date = new Date().toUTCString()
 	const auth_key = process.env.MEGAPLAN_ACCESS_ID + ':' +
 		Buffer.from(
-			crypto
-				.createHmac('sha1', process.env.MEGAPLAN_SECRET_KEY)
+			createHmac('sha1', process.env.MEGAPLAN_SECRET_KEY)
 				.update([
 					method,
 					'',
@@ -65,7 +64,7 @@ const megaplan = async ( method, uri, data ) => {
 				.digest('hex')
 		).toString('base64')
 	try {
-		const res = await axios.request({
+		const res = await request({
 			method: method.toLowerCase(),
 			url: 'https://' + process.env.MEGAPLAN_HOST + uri,
 			headers: {
@@ -85,7 +84,7 @@ const megaplan = async ( method, uri, data ) => {
 	}
 }
 
-module.exports = { 
+export default { 
 	megaplan,
 	megaplan_v3
 }

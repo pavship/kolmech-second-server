@@ -19,12 +19,10 @@
 
 
 
-const axios = require('axios')
+import axios from 'axios'
 
 const telegram = axios.create({
   baseURL: `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/`,
 })
 
-module.exports = { 
-  sendDevMessage: text => telegram.get(`sendMessage?chat_id=${process.env.TELEGRAM_DEV_CHAT_ID}&text=${text}`)
-}
+export function sendDevMessage(text) { return telegram.get(`sendMessage?chat_id=${process.env.TELEGRAM_DEV_CHAT_ID}&text=${text}`) }

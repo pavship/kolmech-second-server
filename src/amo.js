@@ -1,11 +1,12 @@
-const axios = require('axios')
+import axios from 'axios'
+import functionName from './function-name.js'
 
 let Amo = null
 let amoExpiresAt = 0
 let amoCookie = ''
 const baseURL = `https://${process.env.AMO_DOMAIN}.amocrm.ru`
 
-const amoConnect = async () => {
+export const amoConnect = async () => {
 	const isExpired = amoExpiresAt < Date.now()/1000
 	if (isExpired) {
 		const res = await axios.post(
@@ -31,7 +32,7 @@ const amoConnect = async () => {
 	return Amo
 }
 
-const findAmoContact = async text => {
+export const findAmoContact = async text => {
 	const { data: { _embedded: { items: contacts } } } = await (await amoConnect())
 		.get('/api/v2/contacts', {
 			params: { query: text }
@@ -39,7 +40,16 @@ const findAmoContact = async text => {
 	return contacts.length ? contacts[0] : null
 }
 
-const getAmoContacts = async () => {
+export const findAmoContacts = async text => {
+	const { data: { _embedded } } = await (await amoConnect())
+		.get('/api/v2/contacts', {
+			params: { query: text }
+		})
+	const result = _embedded?.items
+	return result
+}
+
+export const getAmoContacts = async () => {
 	const Amo = await amoConnect()
 	const results = await Promise.all([0, 500, 1000, 1500, 2000, 2500, 3000, 3500].map(offset =>
 		Amo.get('/api/v2/contacts?limit_rows=500&limit_offset=' + offset)
@@ -51,9 +61,3 @@ const getAmoContacts = async () => {
 	return contacts
 }
 
-
-module.exports = {
-	amoConnect,
-	findAmoContact,
-	getAmoContacts
-}

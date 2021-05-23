@@ -1,20 +1,15 @@
-const express = require('express')
-const basicAuth = require('express-basic-auth')
+import express, { json, urlencoded } from 'express'
+import basicAuth from 'express-basic-auth'
+import dotenv from 'dotenv'
+dotenv.config()
 const app = express()
-require('dotenv').config()
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+app.use(json())
+app.use(urlencoded({ extended: true }))
 
-const {
-	checkDealChanges, 
-	upsertDealDiskFolder, 
-	deleteDealDiskFolder, 
-	upsertDealMpProject, 
-	deleteDealMpProject,
-	downloadMailAttachments,
-} = require('./src/lead')
-const { getAllTasksV3 } = require('./src/task')
-const { findAmoContact, getAmoContacts } = require('./src/amo')
+import { checkDealChanges, upsertDealDiskFolder, deleteDealDiskFolder, upsertDealMpProject, deleteDealMpProject, downloadMailAttachments } from './src/lead'
+import { getAllTasks } from './src/task'
+import { getAllprojects } from './src/project'
+import { findAmoContact, getAmoContacts } from './src/amo'
 
 let lastUpdatedDeal = {}
 
@@ -115,11 +110,25 @@ app.get('/contacts', async(req, res) => {
 	}
 })
 
+app.get('/projects', async(req, res) => {
+	console.log('-> incoming request from ip: ', req.headers['x-forwarded-for'] || req.connection.remoteAddress, ' -> /projects')
+	console.log('-> user: ', req.auth.user)
+	try {
+		const projects = await getAllprojects()
+		res.send({ projects })
+	} catch (err) {
+		res.status(500).send({
+			message: 'Kolmech second server error!'
+		})
+		console.log('/projects error > ', err)
+	}
+})
+
 app.get('/tasks', async(req, res) => {
 	console.log('-> incoming request from ip: ', req.headers['x-forwarded-for'] || req.connection.remoteAddress, ' -> /tasks')
 	console.log('-> user: ', req.auth.user)
 	try {
-		const tasks = await getAllTasksV3()
+		const tasks = await getAllTasks()
 		res.send({ tasks })
 	} catch (err) {
 		res.status(500).send({
