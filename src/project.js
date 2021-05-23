@@ -1,4 +1,4 @@
-import { megaplan_v3 } from './megaplan'
+import { megaplan_v3 } from './megaplan.js'
 
 const getAllprojects = async() => {
   let tasks = []
@@ -16,6 +16,6 @@ const getAllprojects = async() => {
   return tasks
 }
 
-export default { 
+export { 
   getAllprojects
 }

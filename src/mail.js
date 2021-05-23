@@ -1,12 +1,11 @@
-import { connect, getParts } from 'imap-simple'
+import ImapSimple from 'imap-simple'
 import { mimeWordsDecode } from 'emailjs-mime-codec'
 
-// const mail = async user => {}
-const mail = async (user, from, time) => {
+export const mail = async (user, from, time) => {
   const userIndex = process.env.EMAIL_USERS.split(' ').indexOf(user)
   if (userIndex === -1) return console.log(`there are no imap credentials for user > ${user}`)
 
-  const connection = await connect({
+  const connection = await ImapSimple.connect({
     imap: {
       user,
       password: process.env.EMAIL_PASSWORDS.split(' ')[userIndex],
@@ -45,7 +44,7 @@ const mail = async (user, from, time) => {
   // console.log('subjects > ', subjects)
   
   const attachments = []
-  const parts = getParts(message.attributes.struct)
+  const parts = ImapSimple.getParts(message.attributes.struct)
   console.log('parts > ', JSON.stringify(parts, null, 2))
   for (const part of parts) {
     if (!(part.disposition && part.disposition.type.toUpperCase === 'ATTACHMENT') && part.type.toUpperCase() !== 'IMAGE') continue  // use this line to download images embedded into message
@@ -74,8 +73,4 @@ const mail = async (user, from, time) => {
   }
   connection.end()
   return attachments
-}
-
-export default {
-  mail
 }

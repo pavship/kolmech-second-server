@@ -1,8 +1,8 @@
 import { stringify } from 'qs'
-import { disk, getFolderName, getDiskResource2Levels, upload } from './disk'
-import { megaplan } from './megaplan'
-import { amoConnect } from './amo'
-import { mail } from './mail'
+import { disk, getFolderName, getDiskResource2Levels, upload } from './disk.js'
+import { megaplan } from './megaplan.js'
+import { amoConnect } from './amo.js'
+import { mail } from './mail.js'
 
 // const deal = {
 // 	id: "164837",
@@ -187,7 +187,7 @@ const deleteDealMpProject = async deal => {
   console.log('megaplan project delete status > ', status)
 }
 
-export default {
+export {
   checkDealChanges,
   upsertDealDiskFolder,
   deleteDealDiskFolder,

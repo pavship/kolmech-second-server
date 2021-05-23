@@ -1,4 +1,4 @@
-import { megaplan, megaplan_v3 } from './megaplan'
+import { megaplan, megaplan_v3 } from './megaplan.js'
 
 const getAllTasks = async() => {
   let tasks = []
@@ -58,7 +58,7 @@ const getOneTask = async() => {
 //   return res.rows
 // }
 
-export default { 
+export { 
   getAllTasks,
   getOneTask,
   // trackTask,

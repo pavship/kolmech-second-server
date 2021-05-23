@@ -1,8 +1,8 @@
-import { create, put } from 'axios'
+import axios from 'axios'
 import { stringify } from 'qs'
-// const { sendDevMessage } = require('./telegram')
+// const { sendDevMessage } = require('./telegram.js')
 
-const disk = create({
+const disk = axios.create({
 	baseURL: 'https://cloud-api.yandex.net/v1/disk/resources',
 	headers: {
 		'content-type': 'application/json',
@@ -85,7 +85,7 @@ const getResourceUploadUrl = async (path, overwrite = true) => {
 
 const upload = async (path, buffer) => {
 	try {
-		put(
+		axios.put(
 			await getResourceUploadUrl(path),
 			buffer,
 			{ responseType: 'arraybuffer'}
@@ -96,8 +96,8 @@ const upload = async (path, buffer) => {
 	}
 }
 
-export default {
-  disk,
+export {
+	disk,
   getDiskResources,
   getFolderName,
   getDiskResources2Levels,

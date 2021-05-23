@@ -1,4 +1,4 @@
-import { request } from 'axios'
+import axios from 'axios'
 import { createHmac } from 'crypto'
 import FormData from 'form-data'
 
@@ -16,7 +16,7 @@ const megaplan_v3 = async ( method, uri, data ) => {
 		form.append('grant_type', 'password')
 		const headers = form.getHeaders()
 		try {
-			const res = await request({
+			const res = await axios.request({
 				method: 'post',
 				url: 'https://' + process.env.MEGAPLAN_HOST + '/api/v3/auth/access_token',
 				headers,
@@ -30,7 +30,7 @@ const megaplan_v3 = async ( method, uri, data ) => {
 		}
 	}
 	try {
-		const res = await request({
+		const res = await axios.request({
 			method: method.toLowerCase(),
 			url: 'https://' + process.env.MEGAPLAN_HOST + uri,
 			headers: {
@@ -64,7 +64,7 @@ const megaplan = async ( method, uri, data ) => {
 				.digest('hex')
 		).toString('base64')
 	try {
-		const res = await request({
+		const res = await axios.request({
 			method: method.toLowerCase(),
 			url: 'https://' + process.env.MEGAPLAN_HOST + uri,
 			headers: {
@@ -84,7 +84,7 @@ const megaplan = async ( method, uri, data ) => {
 	}
 }
 
-export default { 
+export { 
 	megaplan,
 	megaplan_v3
 }

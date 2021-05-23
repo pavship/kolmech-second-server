@@ -6,10 +6,10 @@ const app = express()
 app.use(json())
 app.use(urlencoded({ extended: true }))
 
-import { checkDealChanges, upsertDealDiskFolder, deleteDealDiskFolder, upsertDealMpProject, deleteDealMpProject, downloadMailAttachments } from './src/lead'
-import { getAllTasks } from './src/task'
-import { getAllprojects } from './src/project'
-import { findAmoContact, getAmoContacts } from './src/amo'
+import { checkDealChanges, upsertDealDiskFolder, deleteDealDiskFolder, upsertDealMpProject, deleteDealMpProject, downloadMailAttachments } from './src/lead.js'
+import { getAllTasks } from './src/task.js'
+import { getAllprojects } from './src/project.js'
+import { findAmoContact, getAmoContacts } from './src/amo.js'
 
 let lastUpdatedDeal = {}
 
