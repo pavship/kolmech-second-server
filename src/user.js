@@ -1,5 +1,6 @@
 import { pgQuery } from './postgres.js'
 import functionName from './function-name.js'
+import bot from '../bot.js'
 
 export async function getUser(chat_id) {
 	let result
@@ -39,4 +40,9 @@ export async function clearStore(chat_id) {
 		"UPDATE users SET store = null WHERE chat_id = $1",
 		[chat_id]
 	)
+}
+
+export async function endJob(data, text) {
+	clearStore(data.user.chat_id)
+	bot.sendMessage(data.user.chat_id, `${text ? text + '. ' : ''}Работа завершена`)
 }

@@ -61,3 +61,10 @@ export const getAmoContacts = async () => {
 	return contacts
 }
 
+export const findAmoCompany = async text => {
+	const { data: { _embedded: { items: contacts } } } = await (await amoConnect())
+		.get('/api/v2/companies', {
+			params: { query: text }
+		})
+	return contacts.length ? contacts[0] : null
+}

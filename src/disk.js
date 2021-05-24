@@ -36,6 +36,16 @@ const getDiskResources = async path => {
 	return resources
 }
 
+const getDiskResource = async (path, id) => {
+  const resources = await getDiskResources(path)
+  const resource = resources.find(r => r.id === id)
+  if (!resource) return null
+  return {
+    ...resource,
+    children: await getDiskResources(resource.path)
+  }
+}
+
 const getFolderName = async (path, id) => {
 	const dirFoldersNames = (await getDiskResources(path))
 		.filter(r => r.type === 'dir').map(({ name }) => name)
@@ -99,6 +109,7 @@ const upload = async (path, buffer) => {
 export {
 	disk,
   getDiskResources,
+	getDiskResource,
   getFolderName,
   getDiskResources2Levels,
 	getDiskResource2Levels,

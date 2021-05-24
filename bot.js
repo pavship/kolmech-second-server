@@ -6,7 +6,8 @@ import fs from 'fs'
 // import axios from 'axios'
 import handleSberTransfer from './flows/handle-sber-transfer.js'
 import { transferAccounting0, transferAccounting10, transferAccounting5 } from './flows/transfer-accounting.js'
-import { clearStore, getStore, getUser } from './src/user.js'
+import { clearStore, endJob, getStore, getUser } from './src/user.js'
+import { createCompanyFolder, handleCompany } from './src/company.js'
 
 dotenv.config()
 
@@ -33,7 +34,7 @@ bot.on('text', async (msg) => {
 	}
 })
 
-bot.onText(/t/, async (msg) => {
+bot.onText(/^t$/, async (msg) => {
 	// console.log('text t > ', msg)
 
 	const data = {}
@@ -43,6 +44,20 @@ bot.onText(/t/, async (msg) => {
 	data.text = fs.readFileSync('output.txt', 'utf-8')
 
 	handleSberTransfer(data)
+
+	// await axios.post('https://hook.integromat.com/tfj6964s5ba98tfdpdwilmoymm7nbxo5', result)
+})
+
+bot.onText(/\.amocrm\.ru\/companies\/detail/, async (msg) => {
+	// console.log('text t > ', msg)
+
+	const data = {}
+
+	data.user = await getUser(msg.chat.id)
+
+	data.msg = msg
+
+	handleCompany(data)
 
 	// await axios.post('https://hook.integromat.com/tfj6964s5ba98tfdpdwilmoymm7nbxo5', result)
 })
@@ -100,9 +115,11 @@ bot.on('callback_query', async (callbackData) => {
 		case 'transfer-accounting-0':
 			transferAccounting0(data)
 			break
+		case 'create-company-folder':
+			createCompanyFolder(data)
+			break
 		case 'cancel':
-			clearStore(msg.chat.id)
-			bot.sendMessage(msg.chat.id, 'Работа завершена')
+			endJob(data)
 			break
 		default:
 			console.log('unhandled callback_query > ', callbackData)
