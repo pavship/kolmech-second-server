@@ -7,7 +7,7 @@ import fs from 'fs'
 import handleSberTransfer from './flows/handle-sber-transfer.js'
 import { transferAccounting0, transferAccounting10, transferAccounting5 } from './flows/transfer-accounting.js'
 import { clearStore, endJob, getStore, getUser } from './src/user.js'
-import { createCompanyFolder, handleCompany } from './src/company.js'
+import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany } from './src/company.js'
 
 dotenv.config()
 
@@ -111,12 +111,19 @@ bot.on('callback_query', async (callbackData) => {
 	const data = await getStore(msg.chat.id)
 	if (!data || data.msg.message_id !== msg.message_id) return
 	data.actions = actions.split(':')
+	console.log('data.actions > ', data.actions)
 	switch (data.actions.shift()) {
 		case 'transfer-accounting-0':
 			transferAccounting0(data)
 			break
 		case 'create-company-folder':
 			createCompanyFolder(data)
+			break
+		case 'create-post-inlet-5':
+			createPostInlet5(data)
+			break
+		case 'create-post-inlet-10':
+			createPostInlet10(data)
 			break
 		case 'cancel':
 			endJob(data)

@@ -11,6 +11,7 @@
     "axios": "^0.21.1",
     "dedent-js": "^1.0.1",
     "deline": "^1.0.4",
+    "docxtemplater": "^3.21.2",
     "dotenv": "^8.2.0",
     "emailjs-mime-codec": "^2.0.9",
     "express": "^4.17.1",
@@ -21,6 +22,7 @@
     "imap-simple": "^5.0.0",
     "node-telegram-bot-api": "^0.53.0",
     "pg": "^8.6.0",
+    "pizzip": "^3.0.6",
     "qs": "^6.9.1",
     "tesseract.js": "^2.1.4"
   },

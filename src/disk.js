@@ -33,12 +33,47 @@ const disk = axios.create({
 const getDiskResources = async path => {
 	const { data: { _embedded: { items: resources }}} = await disk.get('?'+
 		stringify({ path, limit: 10000 }))
+	// console.log('resources > ', resources)
+	// [
+	// 	{
+	// 		name: 'Инновационные Решения',
+	// 		exif: {},
+	// 		created: '2020-02-02T17:04:13+00:00',
+	// 		resource_id: '873797308:00c164aa65ac4f81dc8f3a7d6700d1ff41181736e5f35b7013',
+	// 		share: { is_root: false, is_owned: true, rights: 'rw' },
+	// 		modified: '2020-02-02T17:04:13+00:00',
+	// 		path: 'disk:/Компании/Инновационные Решения',
+	// 		comment_ids: {
+	// 			private_resource: '873797308:00c164aa65ac4f81dc8f3a7d61c9eff41181736e5f35b7013',
+	// 			public_resource: '873797308:00c164aa65ac4f81dc8f3a7fdfcfee700d1ff41181736e5f35b7013'
+	// 		},
+	// 		type: 'dir',
+	// 		revision: 1580663053903086
+	// 	},
+	// 	{
+	// 		name: 'Ваникор ГТ_58854281',
+	// 		exif: {},
+	// 		created: '2019-08-26T10:37:05+00:00',
+	// 		resource_id: '873797308:ef68e7c886b712f37d71024ed4fb8191c111d70bdb10e42953db8a',
+	// 		share: { is_root: false, is_owned: true, rights: 'rw' },
+	// 		modified: '2019-08-26T10:37:05+00:00',
+	// 		path: 'disk:/Компании/Ваникор ГТ_58854281',
+	// 		comment_ids: {
+	// 			private_resource: '873797308:ef68e7c886b712f37d71024ed4f7f1c111d70bdb10e42953db8a',
+	// 			public_resource: '873797308:ef68e7c886b712f37d71024ed4fb819a0bdb10e42953db8a'
+	// 		},
+	// 		type: 'dir',
+	// 		revision: 1566815825521169
+	// 	},
+	// 	... 162 more items
+	// ]
 	return resources
 }
 
 const getDiskResource = async (path, id) => {
   const resources = await getDiskResources(path)
-  const resource = resources.find(r => r.id === id)
+	// resources.forEach(r => console.log('r.name.slice(-id.length), id > ', r.name.slice(-id.length), id))
+  const resource = resources.find(r => r.name.slice(-8) == id)
   if (!resource) return null
   return {
     ...resource,
