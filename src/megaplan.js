@@ -84,7 +84,12 @@ const megaplan = async ( method, uri, data ) => {
 	}
 }
 
+const getTask = async id => {
+	return (await megaplan_v3( 'GET', `/api/v3/task/${id}` )).data
+}
+
 export { 
 	megaplan,
-	megaplan_v3
+	megaplan_v3,
+	getTask
 }

@@ -1,7 +1,9 @@
 import dotenv from 'dotenv'
+import pg from 'pg'
+import pgPromise from 'pg-promise'
+
 dotenv.config()
 
-import pg from 'pg'
 
 const pool = new pg.Pool({
   connectionString: process.env.PGCONSTRING
@@ -10,6 +12,10 @@ const pool = new pg.Pool({
 const pgQuery = async(text, params) => {
 	return pool.query(text, params)
 }
+
+const pgp = pgPromise()
+pgp.pg.types.setTypeParser(1700, parseFloat);
+const db = pgp(process.env.PGCONSTRING)
 
 // // with logging
 // const query = async (text, params) {
@@ -20,4 +26,7 @@ const pgQuery = async(text, params) => {
 // 	return res
 // }
 
-export { pgQuery }
+
+
+
+export { pgQuery, db }

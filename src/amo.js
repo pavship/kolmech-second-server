@@ -1,5 +1,4 @@
 import axios from 'axios'
-import functionName from './function-name.js'
 
 let Amo = null
 let amoExpiresAt = 0
@@ -40,12 +39,10 @@ export const findAmoContact = async text => {
 	return contacts.length ? contacts[0] : null
 }
 
-export const findAmoContacts = async text => {
+export const findAmoContacts = async params => {
 	const { data: { _embedded } } = await (await amoConnect())
-		.get('/api/v2/contacts', {
-			params: { query: text }
-		})
-	const result = _embedded?.items
+		.get('/api/v2/contacts', { params })
+	const result = _embedded?.items || []
 	return result
 }
 
@@ -62,9 +59,8 @@ export const getAmoContacts = async () => {
 }
 
 export const findAmoCompany = async text => {
-	const { data: { _embedded: { items: contacts } } } = await (await amoConnect())
-		.get('/api/v2/companies', {
-			params: { query: text }
-		})
-	return contacts.length ? contacts[0] : null
+	const result = 
+		(await (await amoConnect()).get('/api/v2/companies', { params: { query: text } })).data?._embedded?.items
+		|| (await (await amoConnect()).get(`/api/v2/companies?id=${text}`)).data?._embedded?.items
+	return result?.[0] || null
 }

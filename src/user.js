@@ -1,5 +1,4 @@
 import { pgQuery } from './postgres.js'
-import functionName from './function-name.js'
 import bot from '../bot.js'
 
 export async function getUser(chat_id) {
@@ -9,7 +8,6 @@ export async function getUser(chat_id) {
 		[chat_id]
 	)
 	result = res.rows[0]
-	// console.log(functionName(), ' result > ', result)
 	// result >  {
 	// 	id: 1,
 	// 	chat_id: 123456789,

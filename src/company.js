@@ -7,9 +7,8 @@ import { stringify } from 'qs'
 import PizZip from 'pizzip'
 import Docxtemplater from 'docxtemplater'
 import fs from 'fs'
-import path from 'path'
 import axios from 'axios'
-import { moedelo } from './moedelo.js'
+import { getOrg } from './moedelo.js'
 
 const companiesDirPath = '/Компании'
 
@@ -151,7 +150,7 @@ export async function createPostInlet5(data) {
 	const { user, company } = data
 	data.inn = company.custom_fields.find(cf => cf.name === 'ИНН')?.values?.[0]?.value
 	if (!data.inn) return endJob(data, `В карточке компании нет ИНН`)
-	data.org = (await moedelo.get(`/kontragents/api/v1/kontragent?pageSize=1000000&inn=${data.inn}`))?.data?.ResourceList?.[0]
+	data.org = getOrg(data.inn)
 	// console.log('data.org > ', JSON.stringify(data.org, null, 2))
 	// data.org >  [
 	// 	{
