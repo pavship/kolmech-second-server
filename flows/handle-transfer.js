@@ -17,7 +17,7 @@ const handleTransfer5 = async data => {
 	}
 
 	// 3. Parse receipt
-	parseReceipt(data.receipt)
+	data.input = data.receipt && parseReceipt(data.receipt)
 	
 	// 4. Get payer account
 	getPayerAccount5(data)
@@ -85,14 +85,19 @@ const parseReceipt = receipt => {
 		to_account_type: 'bank',
 		amount: receipt.query.sum/100,
 		datetime: Date.parse(receipt.query.date + 'Z')/1000 - 3*3600, //Moscow time to Epoch
+		to_account_holder: null,
+		to_account_number: null,
+		to_account_phone: null,
 	}
 }
 
 const getPayerAccount5 = async data => {
-	const { input } = data
-	data.from_account = await db.oneOrNone(
-		"SELECT * FROM public.account WHERE bank_name = $1 AND number LIKE '%'||$2 and type = 'card'",
-		[input.from_account_bank_name, input.from_account_number]
+	const { input, receipt } = data
+	if (!receipt) data.from_account = await db.oneOrNone(
+		`SELECT * FROM public.account WHERE type = 'card'
+		AND bank_name = $<from_account_bank_name>
+		AND number LIKE '%'||$<from_account_number>`,
+		input
 	)
 	//#region schema
 	// console.log(functionName(), ' result > ', result)
@@ -150,6 +155,7 @@ const getPayerAccount10 = async data => {
 	)
 
 	data.from_account = result
+	// await setStore(data)
 	return handleTransfer10(data)
 }
 
@@ -255,8 +261,8 @@ const notifyUser = async data => {
 								#️⃣ ${transfer.id}
 								🗓 ${new Date((transfer.datetime + 3*3600)*1000).toISOString().replace(/T|\.000Z/g, ' ')}
 								💵 ${transfer.amount} ₽
-								${!!data.org && `📥🏢: ${data.org.ShortName} (ИНН: ${data.org.Inn})`}
-								${!!transfer.was_existent && `Учтено: ${transfer.paid_total} ₽`}`
+								${!!data.org ? `📥🏢: ${data.org.ShortName} (ИНН: ${data.org.Inn})` : ''}
+								${!!transfer.was_existent ? `Учтено: ${transfer.paid_total} ₽` : ''}`
 								// 📤 ${transfer['from_account']['name']}
 	data.msg = await bot.sendMessage( user.chat_id,
 		text,
