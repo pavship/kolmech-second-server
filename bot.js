@@ -1,11 +1,12 @@
 process.env.NTBA_FIX_319 = 1
+process.env.debug = true
 import dotenv from 'dotenv'
 import TelegramBot from 'node-telegram-bot-api'
 import tesseract from 'tesseract.js'
 import fs from 'fs'
 import axios from 'axios'
 import { handleTransfer5, getPayerAccount10 } from './flows/handle-transfer.js'
-import { transferAccounting0, transferAccounting10, transferAccounting15, transferAccounting5 } from './flows/transfer-accounting.js'
+import { checkoutMove, requireCompensaton, transferAccounting0, transferAccounting10, transferAccounting15, transferAccounting5 } from './flows/transfer-accounting.js'
 import { clearStore, endJob, getStore, getUser } from './src/user.js'
 import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany } from './src/company.js'
 
@@ -14,7 +15,7 @@ dotenv.config()
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {polling: true})
 
 bot.on('text', async (msg) => {
-	console.log('text msg > ', msg)
+	// console.log('text msg > ', msg)
 
 	const data = await getStore(msg.chat.id)
 	if (!data) return
@@ -38,7 +39,7 @@ bot.on('text', async (msg) => {
 })
 
 bot.onText(/^t$/, async (msg) => {
-	// console.log('text t > ', msg)
+	// console.log('text t msg > ', msg)
 	const data = {}
 	data.user = await getUser(msg.chat.id)
 	data.text = fs.readFileSync('output.txt', 'utf-8')
@@ -47,7 +48,7 @@ bot.onText(/^t$/, async (msg) => {
 })
 
 bot.onText(/\.amocrm\.ru\/companies\/detail/, async (msg) => {
-	// console.log('text t > ', msg)
+	// console.log('companies/detail/ msg > ', msg)
 	const data = {}
 	data.user = await getUser(msg.chat.id)
 	data.msg = msg
@@ -55,7 +56,7 @@ bot.onText(/\.amocrm\.ru\/companies\/detail/, async (msg) => {
 })
 
 bot.on('photo', async (msg) => {
-	console.log('photo msg > ', msg)
+	// console.log('photo msg > ', msg)
 
 	const href = await bot.getFileLink(msg.photo[msg.photo.length - 1].file_id)
 	const { data: { text } } = await tesseract.recognize( href, 'rus+eng',
@@ -65,7 +66,7 @@ bot.on('photo', async (msg) => {
 })
 
 bot.on('document', async (msg) => {
-	console.log('document msg > ', msg)
+	// console.log('document msg > ', msg)
 
 	let data = await getStore(msg.chat.id)
 	if (!data) data = {
@@ -118,7 +119,7 @@ bot.on('callback_query', async (callbackData) => {
 	// 	chat_instance: '8440646773580874000',
 	// 	data: 'transfer-accounting-0'
 	// }
-	// await bot.answerCallbackQuery(callbackData.id, { cache_time: 60 })
+	bot.answerCallbackQuery(callbackData.id, { cache_time: 60 })
 	const { data: actions, message: msg } = callbackData
 	const data = await getStore(msg.chat.id)
 	if (!data || data.msg.message_id !== msg.message_id) return
@@ -139,6 +140,12 @@ bot.on('callback_query', async (callbackData) => {
 			break
 		case 'transfer-accounting-15':
 			transferAccounting15(data)
+			break
+		case 'checkout-move':
+			checkoutMove(data)
+			break
+		case 'require-compensation':
+			requireCompensaton(data)
 			break
 		case 'create-company-folder':
 			createCompanyFolder(data)

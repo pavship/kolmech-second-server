@@ -3,8 +3,9 @@ import bot from '../bot.js'
 import { endJob, setStore } from '../src/user.js'
 import dedent from 'dedent-js'
 import { outputJson, functionName } from '../src/utils.js'
-import { findAmoContacts } from '../src/amo.js'
+import { amoBaseUrl, findAmoContacts, getAmoContact } from '../src/amo.js'
 import { getOrg } from '../src/moedelo.js'
+import { getTask } from '../src/megaplan.js'
 
 const handleTransfer5 = async data => {
 	// 1. Parse text
@@ -12,7 +13,7 @@ const handleTransfer5 = async data => {
 	
 	// 2. Check receipt
 	if (await checkReceipt(data)) {
-		notifyUser(data)
+		checkoutTransfer(data)
 		return
 	}
 
@@ -32,7 +33,7 @@ const handleTransfer10 = async data => {
 	await createTransfer(data)
 
 	// 7. Notify user
-	notifyUser(data)
+	checkoutTransfer(data)
 }
 
 const parseText = (text) => {
@@ -143,7 +144,7 @@ const getPayerAccount5 = async data => {
 
 const getPayerAccount10 = async data => {
 	const { msg: { text }, actions } = data
-	const	amo_id = parseInt(text) || parseInt(actions[0])
+	const	amo_id = parseInt(text) || parseInt(actions.shift())
 	let result
 
 	result = await db.oneOrNone(
@@ -247,35 +248,47 @@ const getMoves = async data => {
 
 const getAccount = async id => db.one( "SELECT * FROM public.account WHERE id = $1", id )
 
-const notifyUser = async data => {
+const checkoutTransfer = async data => {
 	const {user, transfer, receipt, from_account, to_account} = data
-	if (transfer.was_existent) {
-		data.moves = await getMoves(data)
+	data.moves = await getMoves(data)
+	if (data.moves) {
 		transfer.paid_total = data.moves.reduce((prev, cur, i) => prev + cur.paid, 0)
+		data.tasks = await Promise.all(data.moves.map(async m => getTask(m.task_id)))
+		data.compensations = await db.any("SELECT * FROM public.move WHERE compensation_for IN ($1:list)", [data.moves.map(({id}) => id)])
 	}
 	if (receipt) data.org = await getOrg(receipt.seller.inn)
 	if (!from_account) data.from_account = await getAccount(transfer.from_account_id)
+	if (data.from_account.amo_id) data.from_amo = await getAmoContact(data.from_account.amo_id)
 	if (!to_account) data.to_account = await getAccount(transfer.to_account_id)
 
 	const text = dedent`Перевод ${transfer.was_existent ? 'уже был ' : ''}зарегистрирован
 								#️⃣ ${transfer.id}
 								🗓 ${new Date((transfer.datetime + 3*3600)*1000).toISOString().replace(/T|\.000Z/g, ' ')}
 								💵 ${transfer.amount} ₽
-								${!!data.org ? `📥🏢: ${data.org.ShortName} (ИНН: ${data.org.Inn})` : ''}
+								${!!data.from_amo ? `📤👤 <a href='${amoBaseUrl}/contacts/detail/${data.from_amo.id}'>${data.from_amo.name}</a>` : ''}
+								${!!data.org ? `📥🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.org.Inn}'>${data.org.ShortName}</a>` : ''}
 								${!!transfer.was_existent ? `Учтено: ${transfer.paid_total} ₽` : ''}`
-								// 📤 ${transfer['from_account']['name']}
-	data.msg = await bot.sendMessage( user.chat_id,
-		text,
+	data.msg = await bot.sendMessage( user.chat_id, text,
 		{
 			reply_markup: {
-				inline_keyboard: [[{
+				inline_keyboard: [
+				...data.moves.map(m => {
+					const { name, humanNumber } = data.tasks.find(t => t.id == m.task_id)
+					const compensation = data.compensations.find(c => c.compensation_for == m.id)
+					return [{
+						text: `${m.paid}/${m.amount} - ${humanNumber}. ${name} ${compensation ? '⤵️' : ''}`,
+						callback_data: `transfer-accounting-0:${m.id}`
+					}]
+				}),
+				[{
 					text: 'Учесть 📊',
 					callback_data: `transfer-accounting-0`
 				}],[{
 					text: 'Закончить 🔚',
 					callback_data: `cancel`
 				}]]
-			}
+			},
+			parse_mode: 'HTML'
 		}
 	)
 	

@@ -2,12 +2,17 @@ import { db } from '../src/postgres.js'
 import bot from '../bot.js'
 import { endJob, getUser, setStore } from './../src/user.js'
 import dedent from 'dedent-js'
+import deline from 'deline'
 import { getTask, megaplan_v3 } from '../src/megaplan.js'
 import { outputJson, functionName } from './../src/utils.js'
-import { findAmoContacts } from './../src/amo.js'
+import { amoBaseUrl, findAmoContacts, getAmoContact } from './../src/amo.js'
+import { getOrg } from '../src/moedelo.js'
 
-export async function transferAccounting0(data) {
-	const { org } = data
+const transferAccounting0 = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const { org, actions, moves } = data
+	const edit_move_id = parseInt(actions.shift())
+	if (edit_move_id) return checkoutMove({ ...data, move: await db.one("SELECT * FROM public.move WHERE id = $1", edit_move_id) })
 
 	// 1. Copy known props
 	data.move = {
@@ -57,7 +62,8 @@ export async function transferAccounting0(data) {
 	return setStore(data)
 }
 
-export async function transferAccounting5(data) {
+const transferAccounting5 = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const { msg: { text }, actions, org } = data
 
 	// 4. TODO Validate answer
@@ -66,7 +72,7 @@ export async function transferAccounting5(data) {
 		data.move.from_inn = org.Inn
 	}
 	else {
-		data.move.from_amo_id = parseInt(text || actions[0])
+		data.move.from_amo_id = parseInt(text) || parseInt(actions.shift())
 		// 5. Find probable tasks
 		const employee = await db.oneOrNone( `SELECT * FROM public.users WHERE amo_id = $1`, data.move.from_amo_id )
 		if (employee) data.tasks = (await megaplan_v3( 'GET',
@@ -95,9 +101,10 @@ export async function transferAccounting5(data) {
 	return setStore(data)
 }
 
-export async function transferAccounting10(data) {
+const transferAccounting10 = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const { msg: { text }, actions } = data
-	data.move.task_id = parseInt(text || actions[0])
+	data.move.task_id = parseInt(text) || parseInt(actions.shift())
 	data.task = data.tasks?.find(t => t.id == data.move.task_id)
 		|| await getTask(data.move.task_id)
 
@@ -128,9 +135,10 @@ export async function transferAccounting10(data) {
 	return setStore(data)
 }
 
-export async function transferAccounting15(data) {
+const transferAccounting15 = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const { msg: { text }, actions } = data
-	data.move.paid = parseFloat(text) || parseFloat(actions[0])
+	data.move.paid = parseFloat(text) || parseFloat(actions.shift())
 
 	// 9. TODO Check answer
 
@@ -138,13 +146,14 @@ export async function transferAccounting15(data) {
 	data.move = await createMove(data)
 
 	// 11. Notify user
-	await notifyUser(data)
+	await checkoutMove(data)
 
 	// 12. Finish
 	endJob(data)
 }
 
-const createMove = async (data) => {
+const createMove = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	let result
 
 	result = await db.one(
@@ -156,9 +165,77 @@ const createMove = async (data) => {
 	return { ...result, was_created: true }
 }
 
-const notifyUser = async ({user, move}) => {
-	const text = dedent`Платеж ${!move.was_created ? 'уже был ' : ''}зарегистрирован
+function noWhiteSpace(strings, ...placeholders) {
+  let withSpace = strings.reduce((result, string, i) => (result + placeholders[i - 1] + string))
+  // let withoutSpace = withSpace.replace(/^\s*$\n/gm, '')
+  let withoutSpace = withSpace.replace(/(^\s*$\n)|(^[\t]*)/gm, '')
+  return withoutSpace
+}
+
+const checkoutMove = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const {user, move} = data
+	data.from_amo = data.to_amo = data.from_org = data.to_org = data.compensation = undefined
+	if (move.from_amo_id) data.from_amo = await getAmoContact(move.from_amo_id)
+	if (move.to_amo_id) data.to_amo = await getAmoContact(move.to_amo_id)
+	if (move.from_inn) data.from_org = await getOrg(move.from_inn)
+	if (move.to_inn) data.to_org = await getOrg(move.to_inn)
+	data.compensation = await db.oneOrNone("SELECT * FROM public.move WHERE compensation_for = $1", move.id)
+
+	const text = noWhiteSpace`Начисление ${!move.was_created ? 'уже было ' : ''}зарегистрировано
 								#️⃣ ${move.id}
-								💵 ${move.paid} ₽`
-	if (move.was_created) return bot.sendMessage( user.chat_id, text )
+								💵 ${move.amount} ₽ начислено
+								💵 ${move.paid} ₽ оплачено
+								${!!data.from_amo ? `Поставщик: 👤 <a href='${amoBaseUrl}/contacts/detail/${data.from_amo.id}'>${data.from_amo.name}</a>` : ''}
+								${!!data.from_org ? `Поставщик: 🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.from_org.Inn}'>${data.from_org.ShortName}</a>` : ''}
+								${!!data.to_amo ? `Покупатель: 👤 <a href='${amoBaseUrl}/contacts/detail/${data.to_amo.id}'>${data.to_amo.name}</a>` : ''}
+								${!!data.to_org ? `Покупатель: 🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.to_org.Inn}'>${data.to_org.ShortName}</a>` : ''}
+								${!!move.compensation_for ? `Начисление является компенсацией за move_id = ${move.compensation_for}` : ''}`
+	// 3. Ask for compensation
+	data.msg = await bot.sendMessage( user.chat_id, text,
+		{
+			reply_markup: {
+				inline_keyboard: [
+				...data.compensation
+					? [[{
+						text: 'Назначенная компенсация ШПС ⤵️',
+						callback_data: `transfer-accounting-0:${data.compensation.id}`
+					}]]
+					: data.to_org?.Inn !== '502238521208'
+					? [[{
+						text: 'Запросить компенсацию у ШПС ⤵️',
+						callback_data: `require-compensation`
+					}]] : [],
+				[{
+					text: 'Закончить 🔚',
+					callback_data: `cancel`
+				}]
+			]},
+			parse_mode: 'HTML'
+		}
+	)
+	data.state = 'transfer-accounting-0'
+	return setStore(data)
+}
+
+const requireCompensaton = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	let result
+
+	result = await db.one(
+		`INSERT INTO public.move(transfer_id, from_amo_id, from_inn, to_amo_id, to_inn, amount, paid, task_id, compensation_for)
+		VALUES (null, $<to_amo_id>, $<to_inn>, null, 502238521208, $<amount>, 0, $<task_id>, $<id>) RETURNING *`,
+		data.move
+	)
+
+	checkoutMove({ ...data, move: { ...result, was_created: true }})
+}
+
+export {
+	transferAccounting0,
+	transferAccounting5,
+	transferAccounting10,
+	transferAccounting15,
+	checkoutMove,
+	requireCompensaton,
 }
