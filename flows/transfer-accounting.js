@@ -77,7 +77,9 @@ const transferAccounting5 = async data => {
 			`/api/v3/task?{ "fields": [ "name", "Category130CustomFieldPlanovieZatrati", "parent", "project" ], "sortBy": [ { "contentType": "SortField", "fieldName": "Category130CustomFieldPlanovieZatrati", "desc": true } ], "filter": { "contentType": "TaskFilter", "id": null, "config": { "contentType": "FilterConfig", "termGroup": { "contentType": "FilterTermGroup", "join": "and", "terms": [ { "contentType": "FilterTermRef", "field": "responsible", "comparison": "equals", "value": [ { "id": "${employee.employee_id}", "contentType": "Employee" } ] }, { "contentType": "FilterTermEnum", "field": "status", "comparison": "equals", "value": [ "filter_any" ] }, { "contentType": "FilterTermEnum", "field": "type", "comparison": "equals", "value": [ "task" ] }, { "contentType": "FilterTermEnum", "field": "status", "comparison": "not_equals", "value": [ "filter_completed" ] } ] } } }, "limit": 25 }`
 		)).data
 	}
-
+	if (await findRequiredCompensations(data))
+		data.tasks = [ ...data.tasks, ...await Promise.all(data.required_compensations.map(async m => getTask(m.task_id))) ]
+	
 	// 6. Ask for task_id
 	data.msg = await bot.sendMessage( data.user.chat_id,
 		`Выберите услугу/задачу или введите соотв. Megaplan TaskId`,
@@ -85,9 +87,13 @@ const transferAccounting5 = async data => {
 			reply_markup: {
 				inline_keyboard: [
 					...(data.tasks ? data.tasks.map(t => [{
-						text: `${t.humanNumber}. ${t.name}`,
+						text: `${t.humanNumber}. ${t.name} ${data.required_compensations.find(m => m.task_id == t.id) ? '⤵️' : ''}`,
 						callback_data: `transfer-accounting-10:${t.id}`
 					}]): []),
+					// data.required_compensations.map(r => [{
+					// 	text: `${t.humanNumber}. ${t.name}`,
+					// 	callback_data: `transfer-accounting-10:${t.id}`
+					// }])
 				[{
 					text: 'Закончить 🔚',
 					callback_data: `cancel`
@@ -99,15 +105,27 @@ const transferAccounting5 = async data => {
 	return setStore(data)
 }
 
+const findRequiredCompensations = async data => {
+	const { move } = data
+	data.required_compensations = await db.any(
+		`SELECT * FROM move
+		WHERE ((from_amo_id IS NOT NULL AND from_amo_id = $<from_amo_id>) OR (from_inn IS NOT NULL AND from_inn = $<from_inn>))
+		AND compensation_for IS NOT NULL AND amount - paid <> 0`,
+		move
+	)
+	return data.required_compensations.length
+}
+
 const transferAccounting10 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
 	const { msg: { text }, actions } = data
 	data.move.task_id = parseInt(text) || parseInt(actions.shift())
 	data.task = data.tasks?.find(t => t.id == data.move.task_id)
 		|| await getTask(data.move.task_id)
+	data.required_compensation = data.required_compensations.find(m => m.task_id == data.task.id)
 
 	// 7. TODO Check answer
-
+	
 	// 8. Ask for amount paid
 	data.msg = await bot.sendMessage( data.user.chat_id,
 		`Укажите или выберите сумму, которую нужно списать на выбранную задачу/услугу`,
@@ -115,11 +133,15 @@ const transferAccounting10 = async data => {
 			reply_markup: {
 				inline_keyboard: [
 				[{
-					text: `Сумму плановых затрат: ${data.task.Category130CustomFieldPlanovieZatrati}`,
+					text: `Сумму плановых затрат: ${data.task.Category130CustomFieldPlanovieZatrati} ₽`,
 					callback_data: `transfer-accounting-15:${data.task.Category130CustomFieldPlanovieZatrati}`
 				}],
+				...data.required_compensation ? [[{
+					text: `Сумму компенсации: ${data.required_compensation.amount - data.required_compensation.paid} ₽/${data.required_compensation.amount} ₽`,
+					callback_data: `transfer-accounting-15:${data.required_compensation.amount - data.required_compensation.paid}`
+				}]] : [],
 				[{
-					text: `Всю сумму платежа: ${data.move.amount}`,
+					text: `Всю сумму платежа: ${data.move.amount} ₽`,
 					callback_data: `transfer-accounting-15:${data.move.amount}`
 				}],
 				[{
@@ -140,14 +162,28 @@ const transferAccounting15 = async data => {
 
 	// 9. TODO Check answer
 
-	// 10. Create move
-	data.move = await createMove(data)
+	// 10. Create or update move
+	data.move = data.required_compensation
+		? await allocateCompensation(data)
+		: await createMove(data)
 
 	// 11. Notify user
 	await checkoutMove(data)
 
 	// 12. Finish
 	endJob(data)
+}
+
+const allocateCompensation = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	let result
+
+	result = await db.one(
+		`UPDATE public.move SET paid = $1, transfer_id = $2 WHERE id = $3 RETURNING *`,
+		[data.move.paid, data.move.transfer_id, data.required_compensation.id]
+	)
+	// console.log(functionName(), ' result > ', result)
+	return { ...result, was_updated: true }
 }
 
 const createMove = async data => {
@@ -173,7 +209,7 @@ const checkoutMove = async data => {
 	if (move.to_inn) data.to_org = await getOrg(move.to_inn)
 	data.compensation = await db.oneOrNone("SELECT * FROM public.move WHERE compensation_for = $1", move.id)
 
-	const text = despace`Начисление ${!move.was_created ? 'уже было ' : ''}зарегистрировано
+	const text = despace`Начисление ${move.was_created ? 'зарегистрировано' : move.was_updated ? 'компенсировано' : 'уже было зарегистрировано'}
 								#️⃣ ${move.id}
 								💵 ${move.amount} ₽ начислено
 								💵 ${move.paid} ₽ оплачено

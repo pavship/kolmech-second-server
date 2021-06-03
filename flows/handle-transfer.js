@@ -289,7 +289,7 @@ const checkoutTransfer = async data => {
 					const { name, humanNumber } = data.tasks.find(t => t.id == m.task_id)
 					const compensation = data.compensations.find(c => c.compensation_for == m.id)
 					return [{
-						text: `${m.paid}/${m.amount} - ${humanNumber}. ${name} ${compensation ? '⤵️' : ''}`,
+						text: `${m.paid} ₽/${m.amount} ₽ - ${humanNumber}. ${name} ${compensation ? '⤵️' : ''}`,
 						callback_data: `transfer-accounting-0:${m.id}`
 					}]
 				}),
