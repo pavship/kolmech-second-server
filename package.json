@@ -9,8 +9,6 @@
   "type": "module",
   "dependencies": {
     "axios": "^0.21.1",
-    "dedent-js": "^1.0.1",
-    "deline": "^1.0.4",
     "docxtemplater": "^3.21.2",
     "dotenv": "^8.2.0",
     "emailjs-mime-codec": "^2.0.9",

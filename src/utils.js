@@ -1,10 +1,10 @@
 import fs from 'fs'
 
-export function outputJson(obj) {
+function outputJson(obj) {
 	fs.writeFileSync('./output.json', JSON.stringify(obj, null, 2))
 }
 
-export function functionName (func = null) {
+function functionName (func = null) {
 	if (func) {
 		if (func.name) {
 			return func.name;
@@ -29,4 +29,17 @@ const findFirstOccurrence = (string, searchElements, fromIndex = 0) => {
 		}
 	}
 	return (min === string.length) ? -1 : min;
+}
+
+// clears blank lines from template strings
+function despace(strings, ...placeholders) {
+  let withSpace = strings.reduce((result, string, i) => (result + placeholders[i - 1] + string))
+  let withoutSpace = withSpace.replace(/(^\s*$\n)|(^[\t]*)/gm, '')
+  return withoutSpace
+}
+
+export {
+	outputJson,
+	functionName,
+	despace
 }

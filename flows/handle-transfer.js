@@ -1,8 +1,7 @@
 import { db } from '../src/postgres.js'
 import bot from '../bot.js'
 import { endJob, setStore } from '../src/user.js'
-import dedent from 'dedent-js'
-import { outputJson, functionName } from '../src/utils.js'
+import { outputJson, functionName, despace } from '../src/utils.js'
 import { amoBaseUrl, findAmoContacts, getAmoContact } from '../src/amo.js'
 import { getOrg } from '../src/moedelo.js'
 import { getTask } from '../src/megaplan.js'
@@ -11,14 +10,11 @@ const handleTransfer5 = async data => {
 	// 1. Parse text
 	data.input = data.text && parseText(data.text)
 	
-	// 2. Check receipt
-	if (await checkReceipt(data)) {
-		checkoutTransfer(data)
-		return
+	// 2. Check or parse receipt
+	if (data.receipt) {
+		if (await checkReceipt(data)) return checkoutTransfer(data)
+		data.input = parseReceipt(data.receipt)
 	}
-
-	// 3. Parse receipt
-	data.input = data.receipt && parseReceipt(data.receipt)
 	
 	// 4. Get payer account
 	getPayerAccount5(data)
@@ -36,7 +32,8 @@ const handleTransfer10 = async data => {
 	checkoutTransfer(data)
 }
 
-const parseText = (text) => {
+const parseText = text => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const result = {
 		from_account_bank_name: 'Сбер',
 		to_account_type: 'card'
@@ -70,6 +67,7 @@ const parseText = (text) => {
 
 // check if this receipt is already in db
 const checkReceipt = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const { receipt } = data
 	const found = await db.oneOrNone(
 		`SELECT * FROM public.transfer
@@ -93,6 +91,7 @@ const parseReceipt = receipt => {
 }
 
 const getPayerAccount5 = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const { input, receipt } = data
 	if (!receipt) data.from_account = await db.oneOrNone(
 		`SELECT * FROM public.account WHERE type = 'card'
@@ -143,6 +142,7 @@ const getPayerAccount5 = async data => {
 }
 
 const getPayerAccount10 = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const { msg: { text }, actions } = data
 	const	amo_id = parseInt(text) || parseInt(actions.shift())
 	let result
@@ -161,6 +161,7 @@ const getPayerAccount10 = async data => {
 }
 
 const getPayeeAccount = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const { input, receipt } = data
 	let result
 	
@@ -170,7 +171,7 @@ const getPayeeAccount = async data => {
 				? `AND inn = $<to_account_inn>`
 				: `AND holder = $<to_account_holder>
 					AND number LIKE '%'||$<to_account_number>
-					AND phone ${!!input.to_account_phone ? '= $<to_account_phone>::VARCHAR(12)' : 'IS NULL'})`
+					AND phone ${!!input.to_account_phone ? '= $<to_account_phone>::VARCHAR(12)' : 'IS NULL'}`
 		)
 	result = await db.oneOrNone(query, input)
 	//#region schema 
@@ -201,6 +202,7 @@ const getPayeeAccount = async data => {
 }
 
 const createTransfer = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const { input, receipt, text } = data
 	let result
 
@@ -239,6 +241,7 @@ const createTransfer = async data => {
 }
 
 const getMoves = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const { transfer } = data
 	return db.any(
 		"SELECT * FROM public.move WHERE transfer_id = $1",
@@ -249,6 +252,7 @@ const getMoves = async data => {
 const getAccount = async id => db.one( "SELECT * FROM public.account WHERE id = $1", id )
 
 const checkoutTransfer = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const {user, transfer, receipt, from_account, to_account} = data
 	data.moves = await getMoves(data)
 	if (data.moves) {
@@ -256,18 +260,27 @@ const checkoutTransfer = async data => {
 		data.tasks = await Promise.all(data.moves.map(async m => getTask(m.task_id)))
 		data.compensations = await db.any("SELECT * FROM public.move WHERE compensation_for IN ($1:list)", [data.moves.map(({id}) => id)])
 	}
-	if (receipt) data.org = await getOrg(receipt.seller.inn)
 	if (!from_account) data.from_account = await getAccount(transfer.from_account_id)
-	if (data.from_account.amo_id) data.from_amo = await getAmoContact(data.from_account.amo_id)
 	if (!to_account) data.to_account = await getAccount(transfer.to_account_id)
+	data.from_amo = data.to_amo = data.from_org = data.to_org = data.compensation = undefined
+	if (data.from_account.amo_id) data.from_amo = await getAmoContact(data.from_account.amo_id)
+	if (data.to_account.amo_id) data.to_amo = await getAmoContact(data.to_account.amo_id)
+	if (data.from_account.inn) data.from_org = await getOrg(data.from_account.inn)
+	if (data.to_account.inn) data.to_org = await getOrg(data.to_account.inn)
 
-	const text = dedent`Перевод ${transfer.was_existent ? 'уже был ' : ''}зарегистрирован
+	const text = despace`Перевод ${transfer.was_existent ? 'уже был ' : ''}зарегистрирован
 								#️⃣ ${transfer.id}
 								🗓 ${new Date((transfer.datetime + 3*3600)*1000).toISOString().replace(/T|\.000Z/g, ' ')}
 								💵 ${transfer.amount} ₽
-								${!!data.from_amo ? `📤👤 <a href='${amoBaseUrl}/contacts/detail/${data.from_amo.id}'>${data.from_amo.name}</a>` : ''}
-								${!!data.org ? `📥🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.org.Inn}'>${data.org.ShortName}</a>` : ''}
+								Плательщик: ${!!data.from_amo ? `👤 <a href='${amoBaseUrl}/contacts/detail/${data.from_amo.id}'>${data.from_amo.name}</a>` : ''}
+								${!!data.from_org ? `🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.from_org.Inn}'>${data.from_org.ShortName}</a>` : ''}
+								${data.from_account.type === 'card' ? '💳' : data.from_account.type} ${data.from_account.bank_name || ''} ${data.from_account.number || ''} ${data.from_account.holder || ''}
+								Получатель: ${!!data.to_amo ? `👤 <a href='${amoBaseUrl}/contacts/detail/${data.to_amo.id}'>${data.to_amo.name}</a>` : ''}
+								${!!data.to_org ? `🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.to_org.Inn}'>${data.to_org.ShortName}</a>` : ''}
+								${data.to_account.type === 'card' ? '💳' : data.to_account.type} ${data.to_account.bank_name || ''} ${data.to_account.number || ''} ${data.to_account.holder || ''}
 								${!!transfer.was_existent ? `Учтено: ${transfer.paid_total} ₽` : ''}`
+								// ${!!data.from_amo ? `📤👤 <a href='${amoBaseUrl}/contacts/detail/${data.from_amo.id}'>${data.from_amo.name}</a>` : ''}
+								// ${!!data.org ? `📥🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.org.Inn}'>${data.org.ShortName}</a>` : ''}
 	data.msg = await bot.sendMessage( user.chat_id, text,
 		{
 			reply_markup: {

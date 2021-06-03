@@ -1,10 +1,8 @@
 import { db } from '../src/postgres.js'
 import bot from '../bot.js'
 import { endJob, getUser, setStore } from './../src/user.js'
-import dedent from 'dedent-js'
-import deline from 'deline'
 import { getTask, megaplan_v3 } from '../src/megaplan.js'
-import { outputJson, functionName } from './../src/utils.js'
+import { outputJson, functionName, despace } from './../src/utils.js'
 import { amoBaseUrl, findAmoContacts, getAmoContact } from './../src/amo.js'
 import { getOrg } from '../src/moedelo.js'
 
@@ -47,10 +45,10 @@ const transferAccounting0 = async data => {
 						text: c.name,
 						callback_data: `transfer-accounting-5:${c.id}`
 					}]),
-					org && [{
+					...!!org ? [[{
 						text: `🏢: ${org.ShortName} (ИНН: ${org.Inn})`,
 						callback_data: `transfer-accounting-5:org`
-					}],
+					}]] : [],
 				[{
 					text: 'Закончить 🔚',
 					callback_data: `cancel`
@@ -165,13 +163,6 @@ const createMove = async data => {
 	return { ...result, was_created: true }
 }
 
-function noWhiteSpace(strings, ...placeholders) {
-  let withSpace = strings.reduce((result, string, i) => (result + placeholders[i - 1] + string))
-  // let withoutSpace = withSpace.replace(/^\s*$\n/gm, '')
-  let withoutSpace = withSpace.replace(/(^\s*$\n)|(^[\t]*)/gm, '')
-  return withoutSpace
-}
-
 const checkoutMove = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
 	const {user, move} = data
@@ -182,7 +173,7 @@ const checkoutMove = async data => {
 	if (move.to_inn) data.to_org = await getOrg(move.to_inn)
 	data.compensation = await db.oneOrNone("SELECT * FROM public.move WHERE compensation_for = $1", move.id)
 
-	const text = noWhiteSpace`Начисление ${!move.was_created ? 'уже было ' : ''}зарегистрировано
+	const text = despace`Начисление ${!move.was_created ? 'уже было ' : ''}зарегистрировано
 								#️⃣ ${move.id}
 								💵 ${move.amount} ₽ начислено
 								💵 ${move.paid} ₽ оплачено
