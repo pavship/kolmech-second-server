@@ -7,23 +7,28 @@ import { getOrg } from '../src/moedelo.js'
 import { getTask } from '../src/megaplan.js'
 
 const handleTransfer5 = async data => {
+	const { text, receipt } = data
+
 	// 1. Parse text
-	data.input = data.text && parseText(data.text)
+	data.input = text && parseText(data)
 	
 	// 2. Check or parse receipt
-	if (data.receipt) {
+	if (receipt) {
 		if (await checkReceipt(data)) return checkoutTransfer(data)
-		data.input = parseReceipt(data.receipt)
+		data.input = parseReceipt(receipt)
 	}
-	
+
 	// 4. Get payer account
 	getPayerAccount5(data)
 }
 
 const handleTransfer10 = async data => {
-	
+	const { input, receipt } = data
+
 	// 5. Get payee account
-	data.to_account = await getPayeeAccount(data)
+	if (!input && !receipt) return askForInn(data)
+	await getPayeeAccount(data)
+	// outputJson(data); return endJob(data)
 
 	// 6. Create transfer
 	await createTransfer(data)
@@ -32,13 +37,28 @@ const handleTransfer10 = async data => {
 	checkoutTransfer(data)
 }
 
-const parseText = text => {
+const parseText = data => {
 	if (process.env.debug) console.log(functionName(), '>')
+	const { text, msg } = data
+	
+	const bank = msg.document?.file_name.endsWith('.pdf') ? 'tinkoff' : 'sber'
 	const result = {
-		from_account_bank_name: 'Сбер',
-		to_account_type: 'card'
+		to_account_type: 'card',
+		to_account_inn: null,
+		...(bank === 'sber') && {
+			from_account_bank_name: 'Сбер',
+			from_account_holder: null,
+			to_account_bank_name: null
+		},
+		...(bank === 'tinkoff') && {
+			from_account_bank_name: 'Тинькофф',
+			from_account_number: null
+		},
 	}
-	const regex = /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=.+MASTERCARD .+)(?<from_account_number>[0-9]{4})$|(?<=ПОЛУЧАТЕЛЬ:.+)(?<to_account_number>[0-9]{4})$|(?<=НОМЕР ТЕЛЕФОНА ПОЛУЧАТЕЛЯ: )(?<to_account_phone>.+)|(?<=СУММА ОПЕРАЦИИ: )(?<amount>.+) РУБ.|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|(?<=ФИО: )(?<to_account_holder>.+)/gm;
+	const regex =
+		(bank === 'sber') ? /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=.+MASTERCARD .+|ОТПРАВИТЕЛЬ:.+)(?<from_account_number>[0-9]{4})$|(?<=ПОЛУЧАТЕЛЬ:.+)(?<to_account_number>[0-9]{4})$|(?<=НОМЕР ТЕЛЕФОНА ПОЛУЧАТЕЛЯ: )(?<to_account_phone>.+)|(?<=СУММА ОПЕРАЦИИ: )(?<amount>.+) РУБ.|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|(?<=ФИО: )(?<to_account_holder>.+)/gm :
+		(bank === 'tinkoff') ? /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=ПереводКлиенту )(?<to_account_bank_name>.*)$|(?<=Получатель)(?<to_account_holder>.*)$|(?<=НОМЕР ТЕЛЕФОНА ПОЛУЧАТЕЛЯ: )(?<to_account_phone>.+)|(?<amount>.+)(?= iСумма)|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|(?<=Отправитель)(?<from_account_holder>.+)|(?<=Карта получателя\*)(?<to_account_number>[0-9]{4}$)/gm
+		: null
 	for (const match of text.matchAll(regex)) {
 		for (const key in match.groups) {
 			if (!!match.groups[key]) result[key] = match.groups[key]
@@ -46,20 +66,35 @@ const parseText = text => {
 	}
 	result.datetime = Date.parse(result.date.split('.').reverse().join('-') + 'T' + result.time + 'Z')/1000 - 3*3600 //Moscow time to Epoch
 	result.to_account_phone = result.to_account_phone?.replace(/[ |(|)|-]/g, '')
+	result.amount = result.amount?.replace(/ /g, '')
 	//#region schema
 	// console.log(functionName(), ' result > ', result)
 	// result >  {
+	//	to_account_type: 'card',
+	//	to_account_inn: null,
 	// 	from_account_bank_name: 'Сбер',
+	// 	from_account_holder: null,
 	// 	date: '05.05.2021',
 	// 	time: '14:06:31',
 	// 	from_account_number: '1234',
 	// 	to_account_number: '1234',
 	// 	amount: '8805.00',
 	// 	bank_fee: '0.00',
-	// 	holder: 'ИВАН ИВАНОВИЧ И.',
+	// 	to_account_holder: 'ИВАН ИВАНОВИЧ И.',
 	// 	datetime: 1620212791,
 	// 	to_account_phone: undefined, // '+79261234567'
-	//	to_account_type: 'card',
+	// }
+	// result >  {
+	// 	"to_account_type": "card",
+	// 	"to_account_inn": null,
+	// 	"date": "17.05.2021",
+	// 	"time": "07:35:04",
+	// 	"to_account_bank_name": "Тинькофф",
+	// 	"amount": "12 738",
+	// 	"from_account_holder": "Павел Шипицын",
+	// 	"to_account_number": "1038",
+	// 	"to_account_holder": "Иван О.",
+	// 	"datetime": 1621226104
 	// }
 	//#endregion
 	return result
@@ -93,10 +128,11 @@ const parseReceipt = receipt => {
 const getPayerAccount5 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
 	const { input, receipt } = data
-	if (!receipt) data.from_account = await db.oneOrNone(
+	
+	if (input && !receipt) data.from_account = await db.oneOrNone(
 		`SELECT * FROM public.account WHERE type = 'card'
 		AND bank_name = $<from_account_bank_name>
-		AND number LIKE '%'||$<from_account_number>`,
+		AND (number LIKE '%'||$<from_account_number> OR holder = $<from_account_holder>)`,
 		input
 	)
 	//#region schema
@@ -116,8 +152,8 @@ const getPayerAccount5 = async data => {
 	//#endregion
 	if (data.from_account) return handleTransfer10(data)
 
+	// Ask user for payer
 	else {
-		// Ask user for payer
 		const usersAmoIds = await db.map( "SELECT * FROM public.users", [], r => r.amo_id )
 		const contacts = await findAmoContacts({ id: usersAmoIds })
 		data.msg = await bot.sendMessage( data.user.chat_id,
@@ -162,17 +198,17 @@ const getPayerAccount10 = async data => {
 
 const getPayeeAccount = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { input, receipt } = data
+	const { input } = data
 	let result
 	
 	const query = 
-		`SELECT * FROM public.account WHERE type = $<to_account_type> ` + (
-			receipt
-				? `AND inn = $<to_account_inn>`
-				: `AND holder = $<to_account_holder>
-					AND number LIKE '%'||$<to_account_number>
-					AND phone ${!!input.to_account_phone ? '= $<to_account_phone>::VARCHAR(12)' : 'IS NULL'}`
-		)
+		`SELECT * FROM public.account
+		WHERE type = $<to_account_type>
+		AND inn ${!!input.to_account_inn ? '= $<to_account_inn>' : 'IS NULL'}
+		AND holder ${!!input.to_account_holder ? '= $<to_account_holder>' : 'IS NULL'}
+		AND number ${!!input.to_account_number ? "LIKE '%'||$<to_account_number>" : 'IS NULL'}
+		AND phone ${!!input.to_account_phone ? '= $<to_account_phone>::VARCHAR(12)' : 'IS NULL'}`
+	console.log('query > ', query)
 	result = await db.oneOrNone(query, input)
 	//#region schema 
 	// console.log(functionName(), ' result > ', result)
@@ -193,12 +229,46 @@ const getPayeeAccount = async data => {
 	if (result) return result
 
 	result = await db.one(
-		`INSERT INTO public.account(type, holder, number, phone, inn)
-		VALUES($<to_account_type>, $<to_account_holder>, $<to_account_number>, $<to_account_phone>, $<to_account_inn>) RETURNING *`,
+		`INSERT INTO public.account(type, holder, number, phone, inn, bank_name)
+		VALUES($<to_account_type>, $<to_account_holder>, $<to_account_number>, $<to_account_phone>, $<to_account_inn>, $<to_account_bank_name>) RETURNING *`,
 		input
 	)
 	// console.log(functionName(), ' result > ', result)
-	return result
+	return data.to_account = result
+}
+
+const askForInn = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const {  msg: { text }, state } = data
+
+	if (state !== 'ask-for-inn') {
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Введите ИНН получателя платежа`,
+			{
+				reply_markup: {
+					inline_keyboard: [
+					[{
+						text: 'Закончить 🔚',
+						callback_data: `cancel`
+					}]]
+				}
+			}
+		)
+		data.state = 'ask-for-inn'
+		return setStore(data)
+	}
+
+	else {
+		data.input = {
+			to_account_type: 'general',
+			to_account_holder: null,
+			to_account_number: null,
+			to_account_phone: null,
+			to_account_inn: text,
+			to_account_bank_name: null
+		}
+		return handleTransfer10(data)
+	}
 }
 
 const createTransfer = async data => {
@@ -240,23 +310,14 @@ const createTransfer = async data => {
 	await setStore(data)
 }
 
-const getMoves = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
-	const { transfer } = data
-	return db.any(
-		"SELECT * FROM public.move WHERE transfer_id = $1",
-		transfer.id
-	)
-}
-
 const getAccount = async id => db.one( "SELECT * FROM public.account WHERE id = $1", id )
 
 const checkoutTransfer = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
 	const {user, transfer, receipt, from_account, to_account} = data
 	data.moves = await getMoves(data)
-	if (data.moves) {
-		transfer.paid_total = data.moves.reduce((prev, cur, i) => prev + cur.paid, 0)
+	transfer.paid_total = data.moves.reduce((prev, cur, i) => prev + cur.paid, 0)
+	if (data.moves.length) {
 		data.tasks = await Promise.all(data.moves.map(async m => getTask(m.task_id)))
 		data.compensations = await db.any("SELECT * FROM public.move WHERE compensation_for IN ($1:list)", [data.moves.map(({id}) => id)])
 	}
@@ -274,10 +335,10 @@ const checkoutTransfer = async data => {
 								💵 ${transfer.amount} ₽
 								Плательщик: ${!!data.from_amo ? `👤 <a href='${amoBaseUrl}/contacts/detail/${data.from_amo.id}'>${data.from_amo.name}</a>` : ''}
 								${!!data.from_org ? `🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.from_org.Inn}'>${data.from_org.ShortName}</a>` : ''}
-								${data.from_account.type === 'card' ? '💳' : data.from_account.type} ${data.from_account.bank_name || ''} ${data.from_account.number || ''} ${data.from_account.holder || ''}
+								${data.from_account.type === 'card' ? '💳' : data.from_account.type === 'bank' ? '🏦' : data.from_account.type} ${data.from_account.bank_name || ''} ${data.from_account.number || ''} ${data.from_account.holder || ''}
 								Получатель: ${!!data.to_amo ? `👤 <a href='${amoBaseUrl}/contacts/detail/${data.to_amo.id}'>${data.to_amo.name}</a>` : ''}
 								${!!data.to_org ? `🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.to_org.Inn}'>${data.to_org.ShortName}</a>` : ''}
-								${data.to_account.type === 'card' ? '💳' : data.to_account.type} ${data.to_account.bank_name || ''} ${data.to_account.number || ''} ${data.to_account.holder || ''}
+								${data.to_account.type === 'card' ? '💳' : data.to_account.type === 'bank' ? '🏦' : data.to_account.type} ${data.to_account.bank_name || ''} ${data.to_account.number || ''} ${data.to_account.holder || ''}
 								${!!transfer.was_existent ? `Учтено: ${transfer.paid_total} ₽` : ''}`
 								// ${!!data.from_amo ? `📤👤 <a href='${amoBaseUrl}/contacts/detail/${data.from_amo.id}'>${data.from_amo.name}</a>` : ''}
 								// ${!!data.org ? `📥🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.org.Inn}'>${data.org.ShortName}</a>` : ''}
@@ -308,8 +369,18 @@ const checkoutTransfer = async data => {
 	return setStore(data)
 }
 
+const getMoves = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const { transfer } = data
+	return db.any(
+		"SELECT * FROM public.move WHERE transfer_id = $1",
+		transfer.id
+	)
+}
+
 export {
 	handleTransfer5,
 	handleTransfer10,
 	getPayerAccount10,
+	askForInn,
 }

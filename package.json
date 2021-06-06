@@ -19,6 +19,7 @@
     "graphql-request": "^1.8.2",
     "imap-simple": "^5.0.0",
     "node-telegram-bot-api": "^0.53.0",
+    "pdf-parse": "^1.1.1",
     "pg": "^8.6.0",
     "pg-promise": "^10.10.2",
     "pizzip": "^3.0.6",

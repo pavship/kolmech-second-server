@@ -3,12 +3,14 @@ process.env.debug = true
 import dotenv from 'dotenv'
 import TelegramBot from 'node-telegram-bot-api'
 import tesseract from 'tesseract.js'
+import pdfParse from 'pdf-parse'
 import fs from 'fs'
 import axios from 'axios'
-import { handleTransfer5, getPayerAccount10 } from './flows/handle-transfer.js'
+import { handleTransfer5, getPayerAccount10, askForInn } from './flows/handle-transfer.js'
 import { checkoutMove, requireCompensaton, transferAccounting0, transferAccounting10, transferAccounting15, transferAccounting5 } from './flows/transfer-accounting.js'
 import { clearStore, endJob, getStore, getUser } from './src/user.js'
 import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany } from './src/company.js'
+import { outputJson } from './src/utils.js'
 
 dotenv.config()
 
@@ -24,6 +26,9 @@ bot.on('text', async (msg) => {
 		case 'get-payer-account-5':
 			getPayerAccount10(data)
 			break
+		case 'ask-for-inn':
+			askForInn(data)
+			break
 		case 'transfer-accounting-0':
 			transferAccounting5(data)
 			break
@@ -38,56 +43,90 @@ bot.on('text', async (msg) => {
 	}
 })
 
-bot.onText(/^t$/, async (msg) => {
+bot.onText(/\/transfer/, async msg => {
+  const data = {
+		user: await getUser(msg.chat.id),
+		msg,
+	}
+	handleTransfer5(data)
+})
+
+bot.onText(/^t$/, async msg => {
 	// console.log('text t msg > ', msg)
-	const data = {}
-	data.user = await getUser(msg.chat.id)
-	data.text = fs.readFileSync('output.txt', 'utf-8')
+	const data = {
+		user: await getUser(msg.chat.id),
+		msg,
+		text: fs.readFileSync('output.txt', 'utf-8')
+	}
 	handleTransfer5(data)
 	// await axios.post('https://hook.integromat.com/tfj6964s5ba98tfdpdwilmoymm7nbxo5', result)
 })
 
 bot.onText(/\.amocrm\.ru\/companies\/detail/, async (msg) => {
 	// console.log('companies/detail/ msg > ', msg)
-	const data = {}
-	data.user = await getUser(msg.chat.id)
-	data.msg = msg
+	const data = {
+		user: await getUser(msg.chat.id),
+		msg
+	}
 	handleCompany(data)
 })
 
 bot.on('photo', async (msg) => {
 	// console.log('photo msg > ', msg)
+	const data = {
+		user: await getUser(msg.chat.id),
+		msg
+	}
 
 	const href = await bot.getFileLink(msg.photo[msg.photo.length - 1].file_id)
+	bot.sendMessage(msg.chat.id, 'Картинка распознаётся, подождите..')
 	const { data: { text } } = await tesseract.recognize( href, 'rus+eng',
 		{ logger: m => console.log(m) }
 	)
+	bot.sendMessage(msg.chat.id, 'Картинка распознана.')
+
 	fs.writeFileSync('output.txt', text)
 })
 
 bot.on('document', async (msg) => {
-	// console.log('document msg > ', msg)
-
+	console.log('document msg > ', msg)
 	let data = await getStore(msg.chat.id)
 	if (!data) data = {
 		user: await getUser(msg.chat.id),
 		msg
 	}
-	const href = await bot.getFileLink(msg.document.file_id)
-	data.receipt = (await axios.get(href)).data[0]
-	handleTransfer5(data)
 
-	// if (data.state) switch (data.state) {
-	// 	case 'transfer-accounting-0':
-	// 		data.receipt = obj
-	// 		transferAccounting5(data)
-	// 		break
-	// 	default:
-	// 		console.log('unhandled document with data> ', data)
-	// }
+	const href = await bot.getFileLink(msg.document.file_id)
+	if (msg.document.file_name.endsWith('.pdf')) {
+		const { data: doc } = await axios.get( href, { responseType: 'arraybuffer'} )
+		data.text = (await pdfParse(doc)).text
+		//#region schema
+				
+
+
+		// 17.05.2021  07:35:04
+		// 12 738 iИтого
+		// ПереводКлиенту Тинькофф
+		// СтатусУспешно
+		// 12 738 iСумма
+		// ОтправительИван Иванов
+		// Карта получателя*1011
+		// ПолучательИван И.
+		// Служба поддержки fb@tinkoff.ru
+		// По вопросам зачисления обращайтесь к получателю
+		// Квитанция  No 1-2-123-123-123
+		//#endregion
+		fs.writeFileSync('output2.txt', data.text)
+	}
+	if (msg.document.file_name.endsWith('.json')) {
+		data.receipt = (await axios.get(href)).data[0]
+	}
+	handleTransfer5(data)
+	return
 })
 
 bot.on('callback_query', async (callbackData) => {
+	//#region schema
 	// console.log('callbackData > ', callbackData)
 	// callbackData >  {
 	// 	id: '2780624024969796000',
@@ -119,6 +158,7 @@ bot.on('callback_query', async (callbackData) => {
 	// 	chat_instance: '8440646773580874000',
 	// 	data: 'transfer-accounting-0'
 	// }
+	//#endregion
 	bot.answerCallbackQuery(callbackData.id, { cache_time: 60 })
 	const { data: actions, message: msg } = callbackData
 	const data = await getStore(msg.chat.id)

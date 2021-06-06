@@ -8,7 +8,7 @@ import { getOrg } from '../src/moedelo.js'
 
 const transferAccounting0 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { org, actions, moves } = data
+	const { to_org, actions, moves } = data
 	const edit_move_id = parseInt(actions.shift())
 	if (edit_move_id) return checkoutMove({ ...data, move: await db.one("SELECT * FROM public.move WHERE id = $1", edit_move_id) })
 
@@ -19,16 +19,13 @@ const transferAccounting0 = async data => {
 		from_inn: data.to_account.inn,
 		to_amo_id: data.from_account.amo_id,
 		to_inn: data.from_account.inn,
-		amount: data.transfer.amount,
 	}
 	
 	// 2. Find probable sellers
 	const from_amo_ids = (await db.any(
 		`SELECT from_amo_id FROM public.move
-		WHERE transfer_id IN (
-			SELECT id FROM public.transfer
-			WHERE to_account_id = $1
-		)`,
+		WHERE from_amo_id IS NOT NULL 
+		AND transfer_id IN ( SELECT id FROM public.transfer WHERE to_account_id = $1 )`,
 		data.to_account.id
 	)).reduce((prev, { from_amo_id }) => `${prev},${from_amo_id}`, '')
 	console.log('from_amo_ids > ', from_amo_ids)
@@ -45,8 +42,8 @@ const transferAccounting0 = async data => {
 						text: c.name,
 						callback_data: `transfer-accounting-5:${c.id}`
 					}]),
-					...!!org ? [[{
-						text: `🏢: ${org.ShortName} (ИНН: ${org.Inn})`,
+					...!!to_org ? [[{
+						text: `🏢: ${to_org.ShortName} (ИНН: ${to_org.Inn})`,
 						callback_data: `transfer-accounting-5:org`
 					}]] : [],
 				[{
@@ -62,12 +59,12 @@ const transferAccounting0 = async data => {
 
 const transferAccounting5 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { msg: { text }, actions, org } = data
+	const { msg: { text }, actions, to_org } = data
 
 	// 4. TODO Validate answer
 
 	if (actions?.[0] === 'org') {
-		data.move.from_inn = org.Inn
+		data.move.from_inn = to_org.Inn
 	}
 	else {
 		data.move.from_amo_id = parseInt(text) || parseInt(actions.shift())
@@ -90,10 +87,6 @@ const transferAccounting5 = async data => {
 						text: `${t.humanNumber}. ${t.name} ${data.required_compensations.find(m => m.task_id == t.id) ? '⤵️' : ''}`,
 						callback_data: `transfer-accounting-10:${t.id}`
 					}]): []),
-					// data.required_compensations.map(r => [{
-					// 	text: `${t.humanNumber}. ${t.name}`,
-					// 	callback_data: `transfer-accounting-10:${t.id}`
-					// }])
 				[{
 					text: 'Закончить 🔚',
 					callback_data: `cancel`
@@ -118,10 +111,10 @@ const findRequiredCompensations = async data => {
 
 const transferAccounting10 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { msg: { text }, actions } = data
-	data.move.task_id = parseInt(text) || parseInt(actions.shift())
-	data.task = data.tasks?.find(t => t.id == data.move.task_id)
-		|| await getTask(data.move.task_id)
+	const { msg: { text }, actions, move, transfer } = data
+	move.task_id = parseInt(text) || parseInt(actions.shift())
+	data.task = data.tasks?.find(t => t.id == move.task_id)
+		|| await getTask(move.task_id)
 	data.required_compensation = data.required_compensations.find(m => m.task_id == data.task.id)
 
 	// 7. TODO Check answer
@@ -141,8 +134,8 @@ const transferAccounting10 = async data => {
 					callback_data: `transfer-accounting-15:${data.required_compensation.amount - data.required_compensation.paid}`
 				}]] : [],
 				[{
-					text: `Всю сумму платежа: ${data.move.amount} ₽`,
-					callback_data: `transfer-accounting-15:${data.move.amount}`
+					text: `Всю сумму платежа: ${transfer.amount} ₽`,
+					callback_data: `transfer-accounting-15:${transfer.amount}`
 				}],
 				[{
 					text: 'Закончить 🔚',
@@ -158,7 +151,7 @@ const transferAccounting10 = async data => {
 const transferAccounting15 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
 	const { msg: { text }, actions } = data
-	data.move.paid = parseFloat(text) || parseFloat(actions.shift())
+	data.move.amount = data.move.paid = parseFloat(text) || parseFloat(actions.shift())
 
 	// 9. TODO Check answer
 
@@ -168,10 +161,7 @@ const transferAccounting15 = async data => {
 		: await createMove(data)
 
 	// 11. Notify user
-	await checkoutMove(data)
-
-	// 12. Finish
-	endJob(data)
+	checkoutMove(data)
 }
 
 const allocateCompensation = async data => {
