@@ -43,7 +43,12 @@ const megaplan_v3 = async ( method, uri, data ) => {
 		// console.log('megaplan v3 res.data > ', JSON.stringify(res.data, null, 2))
 		return res.data
 	} catch (err) {
-		console.log('megaplan v3 err.response > ', err.response)
+		console.log('megaplan v3 err.response > ', {
+			url: err.response.config.url,
+			status: err.response.status,
+			statusText: err.response.statusText,
+		})
+		// console.log('megaplan v3 err.response > ', err.response)
 		return err
 	}
 }
@@ -471,8 +476,18 @@ const getTask = async id => (await megaplan_v3( 'GET', `/api/v3/task/${id}` )).d
 // }
 //#endregion
 
+const setTaskBudget = async (id, value) => (await megaplan_v3(
+	'POST',
+	`/api/v3/task/${id}`,
+	{ id, contentType: "Task", Category130CustomFieldPlanovieZatrati: value}
+)).data
+
+const getProj = async id => (await megaplan_v3( 'GET', `/api/v3/project/${id}` )).data
+
 export { 
 	megaplan,
 	megaplan_v3,
-	getTask
+	getTask,
+	getProj,
+	setTaskBudget
 }

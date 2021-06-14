@@ -4,9 +4,11 @@ import { endJob, setStore } from '../src/user.js'
 import { outputJson, functionName, despace } from '../src/utils.js'
 import { amoBaseUrl, findAmoContacts, getAmoContact } from '../src/amo.js'
 import { getOrg } from '../src/moedelo.js'
-import { getTask } from '../src/megaplan.js'
+import { getProj, getTask } from '../src/megaplan.js'
+import { getTochkaPayments } from '../src/tochka.js'
 
 const handleTransfer5 = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
 	const { text, receipt } = data
 
 	// 1. Parse text
@@ -23,17 +25,23 @@ const handleTransfer5 = async data => {
 }
 
 const handleTransfer10 = async data => {
-	const { input, receipt } = data
+	if (process.env.debug) console.log(functionName(), '>')
+	const { input, receipt, to_account, transfer } = data
 
 	// 5. Get payee account
 	if (!input && !receipt) return askForInn(data)
-	await getPayeeAccount(data)
-	// outputJson(data); return endJob(data)
+	if (!to_account) await getPayeeAccount(data)
 
-	// 6. Create transfer
-	await createTransfer(data)
+	// 6. Check or ask for amount
+	if (!input.amount) return askForAmount(data)
 
-	// 7. Notify user
+	// 7. Check or ask for date
+	if (!input.datetime) return askForDate(data)
+
+	// 7. Create transfer
+	if (!transfer) return createTransfer(data)
+
+	// 8. Notify user
 	checkoutTransfer(data)
 }
 
@@ -43,8 +51,10 @@ const parseText = data => {
 	
 	const bank = msg.document?.file_name.endsWith('.pdf') ? 'tinkoff' : 'sber'
 	const result = {
+		from_account_type: 'card',
 		to_account_type: 'card',
 		to_account_inn: null,
+		to_account_bank_bik: null,
 		...(bank === 'sber') && {
 			from_account_bank_name: 'Сбер',
 			from_account_holder: null,
@@ -117,6 +127,8 @@ const parseReceipt = receipt => {
 	return {
 		to_account_inn: receipt.seller.inn,
 		to_account_type: 'bank',
+		to_account_bank_name: null,
+		to_account_bank_bik: null,
 		amount: receipt.query.sum/100,
 		datetime: Date.parse(receipt.query.date + 'Z')/1000 - 3*3600, //Moscow time to Epoch
 		to_account_holder: null,
@@ -130,7 +142,8 @@ const getPayerAccount5 = async data => {
 	const { input, receipt } = data
 	
 	if (input && !receipt) data.from_account = await db.oneOrNone(
-		`SELECT * FROM public.account WHERE type = 'card'
+		`SELECT * FROM public.account
+		WHERE type = $<from_account_type>
 		AND bank_name = $<from_account_bank_name>
 		AND (number LIKE '%'||$<from_account_number> OR holder = $<from_account_holder>)`,
 		input
@@ -166,6 +179,10 @@ const getPayerAccount5 = async data => {
 							callback_data: `get-payer-account-10:${c.id}`
 						}]),
 					[{
+						text: 'Подтянуть из Точки',
+						callback_data: `select-tochka-payment`
+					}],
+					[{
 						text: 'Закончить 🔚',
 						callback_data: `cancel`
 					}]]
@@ -196,6 +213,53 @@ const getPayerAccount10 = async data => {
 	return handleTransfer10(data)
 }
 
+const selectTochkaPayment = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const { state, actions } = data
+
+	if (state !== 'select-tochka-payment') {
+		data.payments = await getTochkaPayments()
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Выберите платеж`,
+			{
+				reply_markup: {
+					inline_keyboard: [
+						...data.payments.map(p => [{
+							text: `${p.payment_purpose}`,
+							callback_data: `select-tochka-payment:${p.x_payment_id}`
+						}]),
+					[{
+						text: 'Закончить 🔚',
+						callback_data: `cancel`
+					}]]
+				}
+			}
+		)
+		data.state = 'select-tochka-payment'
+		return setStore(data)
+	}
+
+	else {
+		data.payment = data.payments.find(p => p.x_payment_id === actions[0])
+		data.input = {
+			from_account_type: 'bank',
+			from_account_bank_name: 'Точка',
+			from_account_number: process.env.TOCHKA_ACCOUNT_CODE_IP,
+			from_account_holder: null,
+			to_account_type: 'bank',
+			to_account_inn: data.payment.counterparty_inn,
+			to_account_number: data.payment.counterparty_account_number,
+			to_account_holder: null,
+			to_account_phone: null,
+			to_account_bank_name: null,
+			to_account_bank_bik: data.payment.counterparty_bank_bic,
+			amount: Math.abs(data.payment.payment_amount),
+			datetime: Date.parse(data.payment.payment_date.split('.').reverse().join('-') + 'T00:00:00Z')/1000 - 3*3600 //Moscow date to Epoch
+		}
+		return getPayerAccount5(data)
+	}
+}
+
 const getPayeeAccount = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
 	const { input } = data
@@ -208,12 +272,14 @@ const getPayeeAccount = async data => {
 		AND holder ${!!input.to_account_holder ? '= $<to_account_holder>' : 'IS NULL'}
 		AND number ${!!input.to_account_number ? "LIKE '%'||$<to_account_number>" : 'IS NULL'}
 		AND phone ${!!input.to_account_phone ? '= $<to_account_phone>::VARCHAR(12)' : 'IS NULL'}`
-	console.log('query > ', query)
 	result = await db.oneOrNone(query, input)
+		|| await db.one(
+				`INSERT INTO public.account(type, holder, number, phone, inn, bank_name, bank_bik)
+				VALUES($<to_account_type>, $<to_account_holder>, $<to_account_number>, $<to_account_phone>, $<to_account_inn>, $<to_account_bank_name>, $<to_account_bank_bik>) RETURNING *`,
+				input
+			)
 	//#region schema 
 	// console.log(functionName(), ' result > ', result)
-	// result >  undefined
-	// OR
 	// result >  {
 	// 	id: 11,
 	// 	type: 'card',
@@ -226,14 +292,7 @@ const getPayeeAccount = async data => {
 	// 	inn: null
 	// }
 	//#endregion
-	if (result) return result
 
-	result = await db.one(
-		`INSERT INTO public.account(type, holder, number, phone, inn, bank_name)
-		VALUES($<to_account_type>, $<to_account_holder>, $<to_account_number>, $<to_account_phone>, $<to_account_inn>, $<to_account_bank_name>) RETURNING *`,
-		input
-	)
-	// console.log(functionName(), ' result > ', result)
 	return data.to_account = result
 }
 
@@ -271,9 +330,63 @@ const askForInn = async data => {
 	}
 }
 
+const askForAmount = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const {  msg: { text }, state, input } = data
+
+	if (state !== 'ask-for-amount') {
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Введите сумму платежа`,
+			{
+				reply_markup: {
+					inline_keyboard: [
+					[{
+						text: 'Закончить 🔚',
+						callback_data: `cancel`
+					}]]
+				}
+			}
+		)
+		data.state = 'ask-for-amount'
+		return setStore(data)
+	}
+
+	else {
+		input.amount = parseFloat(text)
+		return handleTransfer10(data)
+	}
+}
+
+const askForDate = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const {  msg: { text }, state, input } = data
+
+	if (state !== 'ask-for-date') {
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Укажите дату платежа в формате ГГГГ-ММ-ДД`,
+			{
+				reply_markup: {
+					inline_keyboard: [
+					[{
+						text: 'Закончить 🔚',
+						callback_data: `cancel`
+					}]]
+				}
+			}
+		)
+		data.state = 'ask-for-date'
+		return setStore(data)
+	}
+
+	else {
+		input.datetime = Date.parse(text + 'T00:00:00Z')/1000 - 3*3600 //Moscow date to Epoch
+		return handleTransfer10(data)
+	}
+}
+
 const createTransfer = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { input, receipt, text } = data
+	const { input, receipt, text, payment } = data
 	let result
 
 	result = await db.oneOrNone(
@@ -301,13 +414,12 @@ const createTransfer = async data => {
 		result = await db.one(
 			`INSERT INTO public.transfer(from_account_id, to_account_id, amount, datetime, receipt, document, created_by)
 			VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-			[data.from_account.id, data.to_account.id, input.amount, input.datetime, receipt, text, data.user.id]
+			[data.from_account.id, data.to_account.id, input.amount, input.datetime, receipt || payment, text, data.user.id]
 		)
 		result.was_created = true
 	}
 
-	data.transfer = result
-	await setStore(data)
+	handleTransfer10({ ...data, transfer: result })
 }
 
 const getAccount = async id => db.one( "SELECT * FROM public.account WHERE id = $1", id )
@@ -318,7 +430,8 @@ const checkoutTransfer = async data => {
 	data.moves = await getMoves(data)
 	transfer.paid_total = data.moves.reduce((prev, cur, i) => prev + cur.paid, 0)
 	if (data.moves.length) {
-		data.tasks = await Promise.all(data.moves.map(async m => getTask(m.task_id)))
+		data.tasks = await Promise.all(data.moves.filter(m => m.task_id).map(async m => getTask(m.task_id)))
+		data.projs = await Promise.all(data.moves.filter(m => m.proj_id).map(async m => getProj(m.proj_id)))
 		data.compensations = await db.any("SELECT * FROM public.move WHERE compensation_for IN ($1:list)", [data.moves.map(({id}) => id)])
 	}
 	if (!from_account) data.from_account = await getAccount(transfer.from_account_id)
@@ -340,14 +453,15 @@ const checkoutTransfer = async data => {
 								${!!data.to_org ? `🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.to_org.Inn}'>${data.to_org.ShortName}</a>` : ''}
 								${data.to_account.type === 'card' ? '💳' : data.to_account.type === 'bank' ? '🏦' : data.to_account.type} ${data.to_account.bank_name || ''} ${data.to_account.number || ''} ${data.to_account.holder || ''}
 								${!!transfer.was_existent ? `Учтено: ${transfer.paid_total} ₽` : ''}`
-								// ${!!data.from_amo ? `📤👤 <a href='${amoBaseUrl}/contacts/detail/${data.from_amo.id}'>${data.from_amo.name}</a>` : ''}
-								// ${!!data.org ? `📥🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.org.Inn}'>${data.org.ShortName}</a>` : ''}
 	data.msg = await bot.sendMessage( user.chat_id, text,
 		{
 			reply_markup: {
 				inline_keyboard: [
 				...data.moves.map(m => {
-					const { name, humanNumber } = data.tasks.find(t => t.id == m.task_id)
+					const { name, humanNumber } = 
+						m.task_id ? data.tasks.find(t => t.id == m.task_id) :
+						m.proj_id ? data.projs.find(p => p.id == m.proj_id) :
+						{ humanNumber: 0, name: 'Начисление не привязано к задаче или проекту!'}
 					const compensation = data.compensations.find(c => c.compensation_for == m.id)
 					return [{
 						text: `${m.paid} ₽/${m.amount} ₽ - ${humanNumber}. ${name} ${compensation ? '⤵️' : ''}`,
@@ -382,5 +496,8 @@ export {
 	handleTransfer5,
 	handleTransfer10,
 	getPayerAccount10,
+	selectTochkaPayment,
 	askForInn,
+	askForAmount,
+	askForDate,
 }

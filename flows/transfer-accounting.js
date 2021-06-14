@@ -1,14 +1,14 @@
 import { db } from '../src/postgres.js'
 import bot from '../bot.js'
 import { endJob, getUser, setStore } from './../src/user.js'
-import { getTask, megaplan_v3 } from '../src/megaplan.js'
+import { getTask, getProj, megaplan_v3, setTaskBudget } from '../src/megaplan.js'
 import { outputJson, functionName, despace } from './../src/utils.js'
 import { amoBaseUrl, findAmoContacts, getAmoContact } from './../src/amo.js'
 import { getOrg } from '../src/moedelo.js'
 
 const transferAccounting0 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { to_org, actions, moves } = data
+	const { to_org, actions } = data
 	const edit_move_id = parseInt(actions.shift())
 	if (edit_move_id) return checkoutMove({ ...data, move: await db.one("SELECT * FROM public.move WHERE id = $1", edit_move_id) })
 
@@ -19,6 +19,8 @@ const transferAccounting0 = async data => {
 		from_inn: data.to_account.inn,
 		to_amo_id: data.from_account.amo_id,
 		to_inn: data.from_account.inn,
+		task_id: null,
+		proj_id: null,
 	}
 	
 	// 2. Find probable sellers
@@ -74,8 +76,10 @@ const transferAccounting5 = async data => {
 			`/api/v3/task?{ "fields": [ "name", "Category130CustomFieldPlanovieZatrati", "parent", "project" ], "sortBy": [ { "contentType": "SortField", "fieldName": "Category130CustomFieldPlanovieZatrati", "desc": true } ], "filter": { "contentType": "TaskFilter", "id": null, "config": { "contentType": "FilterConfig", "termGroup": { "contentType": "FilterTermGroup", "join": "and", "terms": [ { "contentType": "FilterTermRef", "field": "responsible", "comparison": "equals", "value": [ { "id": "${employee.employee_id}", "contentType": "Employee" } ] }, { "contentType": "FilterTermEnum", "field": "status", "comparison": "equals", "value": [ "filter_any" ] }, { "contentType": "FilterTermEnum", "field": "type", "comparison": "equals", "value": [ "task" ] }, { "contentType": "FilterTermEnum", "field": "status", "comparison": "not_equals", "value": [ "filter_completed" ] } ] } } }, "limit": 25 }`
 		)).data
 	}
-	if (await findRequiredCompensations(data))
-		data.tasks = [ ...data.tasks, ...await Promise.all(data.required_compensations.map(async m => getTask(m.task_id))) ]
+	if (await findRequiredCompensations(data)) {
+		data.tasks = [ ...data.tasks, ...await Promise.all(data.required_compensations.filter(m => m.task_id).map(async m => getTask(m.task_id))) ]
+		data.projs = await Promise.all(data.required_compensations.filter(m => m.proj_id).map(async m => getProj(m.proj_id)))
+	}
 	
 	// 6. Ask for task_id
 	data.msg = await bot.sendMessage( data.user.chat_id,
@@ -85,7 +89,11 @@ const transferAccounting5 = async data => {
 				inline_keyboard: [
 					...(data.tasks ? data.tasks.map(t => [{
 						text: `${t.humanNumber}. ${t.name} ${data.required_compensations.find(m => m.task_id == t.id) ? '⤵️' : ''}`,
-						callback_data: `transfer-accounting-10:${t.id}`
+						callback_data: `select-entity:task:${t.id}`
+					}]): []),
+					...(data.projs ? data.projs.map(p => [{
+						text: `${p.humanNumber}. ${p.name} ${data.required_compensations.find(m => m.proj_id == p.id) ? '⤵️' : ''}`,
+						callback_data: `select-entity:proj:${p.id}`
 					}]): []),
 				[{
 					text: 'Закончить 🔚',
@@ -94,7 +102,7 @@ const transferAccounting5 = async data => {
 			}
 		}
 	)
-	data.state = 'transfer-accounting-5'
+	data.state = 'select-entity'
 	return setStore(data)
 }
 
@@ -109,13 +117,57 @@ const findRequiredCompensations = async data => {
 	return data.required_compensations.length
 }
 
-const transferAccounting10 = async data => {
+const selectEntity = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { msg: { text }, actions, move, transfer } = data
-	move.task_id = parseInt(text) || parseInt(actions.shift())
-	data.task = data.tasks?.find(t => t.id == move.task_id)
-		|| await getTask(move.task_id)
-	data.required_compensation = data.required_compensations.find(m => m.task_id == data.task.id)
+	const { msg: { text }, actions, move, user } = data
+
+	const text_input_id = parseInt(text)
+	if (text_input_id) {
+		const task = await getTask(text_input_id)
+		const proj = await getProj(text_input_id)
+		console.log('task, proj > ', task, proj)
+		if (task && !proj) return askForAmount({ ...data, task })
+		if (proj && !task) return askForAmount({ ...data, proj })
+		data.msg = await bot.sendMessage( user.chat_id,
+			`Уазанному id соответствуют задача и проект. Уточните выбор`,
+			{
+				reply_markup: {
+					inline_keyboard: [
+					...task ? [[{
+						text: `Task: ${task.humanNumber}. ${task.name}`,
+						callback_data: `select-entity:task:${task.id}`
+					}]] : [],
+					...proj ? [[{
+						text: `Project: ${proj.humanNumber}. ${proj.name}`,
+						callback_data: `select-entity:proj:${proj.id}`
+					}]] : [],
+					[{
+						text: 'Закончить 🔚',
+						callback_data: `cancel`
+					}]]
+				}
+			}
+		)
+		data.state = 'select-entity'
+		return setStore(data)
+	}
+
+	const entity_type = actions.shift()
+	const id = parseInt(actions.shift())
+	if (entity_type === 'task') data.task = data.tasks?.find(t => t.id == id)	|| await getTask(id)
+	if (entity_type === 'proj') data.proj = await getProj(id)
+
+	askForAmount(data)
+}
+
+const askForAmount = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const { transfer, task } = data
+	// const { msg: { text }, actions, move, transfer, task, proj } = data
+	// move.task_id = parseInt(text) || parseInt(actions.shift())
+	// data.task = data.tasks?.find(t => t.id == move.task_id)
+	// 	|| await getTask(move.task_id)
+	data.required_compensation = data.required_compensations.find(m => m.task_id == task?.id)
 
 	// 7. TODO Check answer
 	
@@ -125,10 +177,10 @@ const transferAccounting10 = async data => {
 		{
 			reply_markup: {
 				inline_keyboard: [
-				[{
-					text: `Сумму плановых затрат: ${data.task.Category130CustomFieldPlanovieZatrati} ₽`,
-					callback_data: `transfer-accounting-15:${data.task.Category130CustomFieldPlanovieZatrati}`
-				}],
+				...task ? [[{
+					text: `Сумму плановых затрат: ${task.Category130CustomFieldPlanovieZatrati} ₽`,
+					callback_data: `transfer-accounting-15:${task.Category130CustomFieldPlanovieZatrati}`
+				}]] : [],
 				...data.required_compensation ? [[{
 					text: `Сумму компенсации: ${data.required_compensation.amount - data.required_compensation.paid} ₽/${data.required_compensation.amount} ₽`,
 					callback_data: `transfer-accounting-15:${data.required_compensation.amount - data.required_compensation.paid}`
@@ -150,8 +202,10 @@ const transferAccounting10 = async data => {
 
 const transferAccounting15 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { msg: { text }, actions } = data
-	data.move.amount = data.move.paid = parseFloat(text) || parseFloat(actions.shift())
+	const { msg: { text }, actions, move, task, proj } = data
+	move.amount = move.paid = parseFloat(text) || parseFloat(actions.shift())
+	if (task) move.task_id = task.id
+	if (proj) move.proj_id = proj.id
 
 	// 9. TODO Check answer
 
@@ -178,13 +232,19 @@ const allocateCompensation = async data => {
 
 const createMove = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
+	const { move, task } = data
 	let result
 
 	result = await db.one(
-		`INSERT INTO public.move(transfer_id, from_amo_id, from_inn, to_amo_id, to_inn, amount, paid, task_id)
-		VALUES ($<transfer_id>, $<from_amo_id>, $<from_inn>, $<to_amo_id>, $<to_inn>, $<amount>, $<paid>, $<task_id>) RETURNING *`,
-		data.move
+		`INSERT INTO public.move(transfer_id, from_amo_id, from_inn, to_amo_id, to_inn, amount, paid, task_id, proj_id)
+		VALUES ($<transfer_id>, $<from_amo_id>, $<from_inn>, $<to_amo_id>, $<to_inn>, $<amount>, $<paid>, $<task_id>, $<proj_id>) RETURNING *`,
+		move
 	)
+
+	// outputJson(data) //; return endJob(data)
+
+	if (task) await setTaskBudget(task.id, task.Category130CustomFieldPlanovieZatrati - move.paid)
+
 	// console.log(functionName(), ' result > ', result)
 	return { ...result, was_created: true }
 }
@@ -218,10 +278,15 @@ const checkoutMove = async data => {
 						text: 'Назначенная компенсация ШПС ⤵️',
 						callback_data: `transfer-accounting-0:${data.compensation.id}`
 					}]]
-					: data.to_org?.Inn !== '502238521208'
+					: data.to_org?.Inn !== '502238521208' && !move.compensation_for
+					? [[{
+						text: 'Запросить компенсацию у ИП ШПС ⤵️',
+						callback_data: `require-compensation:inn:502238521208`
+					}]]
+					: data.to_amo?.id !== 22575633 && !move.compensation_for
 					? [[{
 						text: 'Запросить компенсацию у ШПС ⤵️',
-						callback_data: `require-compensation`
+						callback_data: `require-compensation:amo_id:22575633`
 					}]] : [],
 				[{
 					text: 'Закончить 🔚',
@@ -237,12 +302,19 @@ const checkoutMove = async data => {
 
 const requireCompensaton = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
+	const {move, actions} = data
 	let result
 
+	const counterparty_type = actions.shift()
+	move.from_inn = move.to_inn
+	move.from_amo_id = move.to_amo_id
+	move.to_inn = counterparty_type === 'inn' ? actions.shift() : null
+	move.to_amo_id = counterparty_type === 'amo_id' ? actions.shift() : null
+
 	result = await db.one(
-		`INSERT INTO public.move(transfer_id, from_amo_id, from_inn, to_amo_id, to_inn, amount, paid, task_id, compensation_for)
-		VALUES (null, $<to_amo_id>, $<to_inn>, null, 502238521208, $<amount>, 0, $<task_id>, $<id>) RETURNING *`,
-		data.move
+		`INSERT INTO public.move(transfer_id, from_amo_id, from_inn, to_amo_id, to_inn, amount, paid, task_id, proj_id, compensation_for)
+		VALUES (null, $<from_amo_id>, $<from_inn>, $<to_amo_id>, $<to_inn>, $<amount>, 0, $<task_id>, $<proj_id>, $<id>) RETURNING *`,
+		move
 	)
 
 	checkoutMove({ ...data, move: { ...result, was_created: true }})
@@ -251,7 +323,7 @@ const requireCompensaton = async data => {
 export {
 	transferAccounting0,
 	transferAccounting5,
-	transferAccounting10,
+	selectEntity,
 	transferAccounting15,
 	checkoutMove,
 	requireCompensaton,

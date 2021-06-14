@@ -6,10 +6,10 @@ import tesseract from 'tesseract.js'
 import pdfParse from 'pdf-parse'
 import fs from 'fs'
 import axios from 'axios'
-import { handleTransfer5, getPayerAccount10, askForInn } from './flows/handle-transfer.js'
-import { checkoutMove, requireCompensaton, transferAccounting0, transferAccounting10, transferAccounting15, transferAccounting5 } from './flows/transfer-accounting.js'
-import { clearStore, endJob, getStore, getUser } from './src/user.js'
+import { handleTransfer5, getPayerAccount10, selectTochkaPayment, askForInn, askForAmount, askForDate } from './flows/handle-transfer.js'
+import { checkoutMove, requireCompensaton, transferAccounting0, selectEntity, transferAccounting15, transferAccounting5 } from './flows/transfer-accounting.js'
 import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany } from './src/company.js'
+import { endJob, getStore, getUser } from './src/user.js'
 import { outputJson } from './src/utils.js'
 
 dotenv.config()
@@ -29,11 +29,17 @@ bot.on('text', async (msg) => {
 		case 'ask-for-inn':
 			askForInn(data)
 			break
+		case 'ask-for-amount':
+			askForAmount(data)
+			break
+		case 'ask-for-date':
+			askForDate(data)
+			break
 		case 'transfer-accounting-0':
 			transferAccounting5(data)
 			break
-		case 'transfer-accounting-5':
-			transferAccounting10(data)
+		case 'select-entity':
+			selectEntity(data)
 			break
 		case 'transfer-accounting-10':
 			transferAccounting15(data)
@@ -116,7 +122,7 @@ bot.on('document', async (msg) => {
 		// По вопросам зачисления обращайтесь к получателю
 		// Квитанция  No 1-2-123-123-123
 		//#endregion
-		fs.writeFileSync('output2.txt', data.text)
+		fs.writeFileSync('output.txt', data.text)
 	}
 	if (msg.document.file_name.endsWith('.json')) {
 		data.receipt = (await axios.get(href)).data[0]
@@ -166,6 +172,9 @@ bot.on('callback_query', async (callbackData) => {
 	data.actions = actions.split(':')
 	console.log('data.actions > ', data.actions)
 	switch (data.actions.shift()) {
+		case 'select-tochka-payment':
+			selectTochkaPayment(data)
+			break
 		case 'get-payer-account-10':
 			getPayerAccount10(data)
 			break
@@ -175,8 +184,8 @@ bot.on('callback_query', async (callbackData) => {
 		case 'transfer-accounting-5':
 			transferAccounting5(data)
 			break
-		case 'transfer-accounting-10':
-			transferAccounting10(data)
+		case 'select-entity':
+			selectEntity(data)
 			break
 		case 'transfer-accounting-15':
 			transferAccounting15(data)

@@ -33,6 +33,63 @@ const amoConnect = async () => {
 }
 
 const getAmoContact = async id => (await findAmoContacts({ id }))?.[0] || null
+//#region schema
+// {
+// 	"id": 12345678,
+// 	"name": "Иванов Иван Иванович",
+// 	"tags": [
+// 			{
+// 					"id": 297358,
+// 					"name": "металл"
+// 			}
+// 	],
+// 	"leads": {},
+// 	"_links": {
+// 			"self": {
+// 					"href": "/api/v2/contacts?id=12345678",
+// 					"method": "get"
+// 			}
+// 	},
+// 	"company": {},
+// 	"group_id": 123456,
+// 	"customers": {},
+// 	"last_name": "",
+// 	"account_id": 12345678,
+// 	"created_at": 1616851377,
+// 	"created_by": 1234567,
+// 	"first_name": "Иванов Иван Иванович",
+// 	"updated_at": 1622405882,
+// 	"updated_by": 1234567,
+// 	"custom_fields": [
+// 			{
+// 					"id": 317989,
+// 					"code": "PHONE",
+// 					"name": "Телефон",
+// 					"values": [
+// 							{
+// 									"enum": 499363,
+// 									"value": "+7 917 123 45 67"
+// 							}
+// 					],
+// 					"type_id": 8,
+// 					"is_system": true
+// 			},
+// 			{
+// 					"id": 404675,
+// 					"name": "Примечания",
+// 					"values": [
+// 							{
+// 									"value": "Примечания"
+// 							}
+// 					],
+// 					"type_id": 9,
+// 					"is_system": false
+// 			}
+// 	],
+// 	"closest_task_at": 0,
+// 	"responsible_user_id": 1234567
+// }
+//#endregion
 
 const findAmoContacts = async params => {
 	const { data: { _embedded } } = await (await amoConnect())
