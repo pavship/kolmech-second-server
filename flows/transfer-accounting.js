@@ -1,6 +1,6 @@
 import { db } from '../src/postgres.js'
 import bot from '../bot.js'
-import { endJob, getUser, setStore } from './../src/user.js'
+import { endJob, setStore } from './../src/user.js'
 import { getTask, getProj, megaplan_v3, setTaskBudget } from '../src/megaplan.js'
 import { outputJson, functionName, despace } from './../src/utils.js'
 import { amoBaseUrl, findAmoContacts, getAmoContact } from './../src/amo.js'
@@ -245,7 +245,6 @@ const createMove = async data => {
 
 	if (task) await setTaskBudget(task.id, task.Category130CustomFieldPlanovieZatrati - move.paid)
 
-	// console.log(functionName(), ' result > ', result)
 	return { ...result, was_created: true }
 }
 

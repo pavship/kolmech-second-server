@@ -6,6 +6,7 @@ import { amoBaseUrl, findAmoContacts, getAmoContact } from '../src/amo.js'
 import { getOrg } from '../src/moedelo.js'
 import { getProj, getTask } from '../src/megaplan.js'
 import { getTochkaPayments } from '../src/tochka.js'
+// outputJson(data); // return endJob(data)
 
 const handleTransfer5 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
@@ -20,13 +21,15 @@ const handleTransfer5 = async data => {
 		data.input = parseReceipt(receipt)
 	}
 
-	// 4. Get payer account
-	getPayerAccount5(data)
+	handleTransfer10(data)
 }
 
 const handleTransfer10 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { input, receipt, to_account, transfer } = data
+	const { input, receipt, from_account, to_account, transfer } = data
+
+	// 4. Get payer account
+	if (!from_account) return getPayerAccount5(data)
 
 	// 5. Get payee account
 	if (!input && !receipt) return askForInn(data)
@@ -167,7 +170,7 @@ const getPayerAccount5 = async data => {
 
 	// Ask user for payer
 	else {
-		const usersAmoIds = await db.map( "SELECT * FROM public.users", [], r => r.amo_id )
+		const usersAmoIds = await db.map( "SELECT amo_id FROM public.users", [], r => r.amo_id )
 		const contacts = await findAmoContacts({ id: usersAmoIds })
 		data.msg = await bot.sendMessage( data.user.chat_id,
 			`Выберите плательщика или введите AmoId последнего.`,
@@ -176,7 +179,7 @@ const getPayerAccount5 = async data => {
 					inline_keyboard: [
 						...contacts.map(c => [{
 							text: `${c.name}`,
-							callback_data: `get-payer-account-10:${c.id}`
+							callback_data: `ask-for-account:amo_id:${c.id}`
 						}]),
 					[{
 						text: 'Подтянуть из Точки',
@@ -190,26 +193,65 @@ const getPayerAccount5 = async data => {
 			}
 		)
 		data.state = 'get-payer-account-5'
+		data.result_field = 'from_account'
 		return setStore(data)
 	}
 }
 
-const getPayerAccount10 = async data => {
+const askForAccount = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { msg: { text }, actions } = data
-	const	amo_id = parseInt(text) || parseInt(actions.shift())
-	let result
+	const { msg: { text }, actions, state, result_field, ask_for_account: cache = {} } = data
 
-	result = await db.oneOrNone(
-		`SELECT * FROM public.account WHERE type = 'general' AND amo_id = $1`,
-		amo_id
-	) || await db.one(
-		"INSERT INTO public.account(type, amo_id) VALUES('general', $1) RETURNING *",
-		amo_id
-	)
+	if (state !== 'ask-for-account') {
+		const cache = data.ask_for_account = {}
+		cache.id_type = actions.length ? actions.shift() : 'amo_id'
+		cache.id = actions.length ? actions.shift() : parseInt(text)
+		cache.accounts = await db.any(
+			`SELECT * FROM public.account WHERE
+			${cache.id_type === 'amo_id' ? 'amo_id = $1' : ''}
+			${cache.id_type === 'inn' ? 'inn = $1' : ''}`,
+			cache.id
+		)
+		const general_account = cache.accounts.find(a => a.type === 'general')
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Введите ИНН получателя платежа`,
+			{
+				reply_markup: {
+					inline_keyboard: [
+						...cache.accounts.map(a => [{
+							text: `${
+								a.type === 'card' ? '💳' :
+								a.type === 'bank' ? '🏦' :
+								a.type === 'cash' ? '💰' :
+								a.type === 'general' ? 'Какой-то счёт (невозможно узнать)' : 
+								'Тип счета неопределен (Ошибка системы!)'
+							} ${a.bank_name} ${a.number}`,
+							callback_data: `ask-for-account:${a.id}`
+						}]),
+						...!general_account ? [[{
+							text: 'Какой-то счёт (невозможно узнать)',
+							callback_data: `ask-for-account:create-general-account`
+						}]] : [],
+					[{
+						text: 'Закончить 🔚',
+						callback_data: `cancel`
+					}]]
+				}
+			}
+		)
+		data.state = 'ask-for-account'
+		return setStore(data)
+	}
 
-	data.from_account = result
-	// await setStore(data)
+	const param = actions.shift()
+	data[result_field] = param === 'create-general-account'
+		? await db.one(
+			`INSERT INTO public.account(type, ${cache.id_type}) VALUES('general', $1) RETURNING *`,
+			cache.id
+		)
+		: cache.accounts.find(a => a.id === parseInt(param))
+
+	;['actions', 'state', 'result_field', 'ask_for_account'].forEach(k => delete data[k])
 	return handleTransfer10(data)
 }
 
@@ -260,6 +302,43 @@ const selectTochkaPayment = async data => {
 	}
 }
 
+const askForInn = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const {  msg: { text }, state } = data
+
+	if (state !== 'ask-for-inn') {
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Введите ИНН получателя платежа`,
+			{
+				reply_markup: {
+					inline_keyboard: [
+					[{
+						text: 'Закончить 🔚',
+						callback_data: `cancel`
+					}]]
+				}
+			}
+		)
+		data.state = 'ask-for-inn'
+		return setStore(data)
+	}
+
+	else {
+		// data.input = {
+		// 	to_account_type: 'general',
+		// 	to_account_holder: null,
+		// 	to_account_number: null,
+		// 	to_account_phone: null,
+		// 	to_account_inn: text,
+		// 	to_account_bank_name: null
+		// }	
+		data.input = {}
+		data.actions = ['inn', text]
+		data.result_field = 'to_account'
+		return askForAccount(data)
+	}
+}
+
 const getPayeeAccount = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
 	const { input } = data
@@ -294,40 +373,6 @@ const getPayeeAccount = async data => {
 	//#endregion
 
 	return data.to_account = result
-}
-
-const askForInn = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
-	const {  msg: { text }, state } = data
-
-	if (state !== 'ask-for-inn') {
-		data.msg = await bot.sendMessage( data.user.chat_id,
-			`Введите ИНН получателя платежа`,
-			{
-				reply_markup: {
-					inline_keyboard: [
-					[{
-						text: 'Закончить 🔚',
-						callback_data: `cancel`
-					}]]
-				}
-			}
-		)
-		data.state = 'ask-for-inn'
-		return setStore(data)
-	}
-
-	else {
-		data.input = {
-			to_account_type: 'general',
-			to_account_holder: null,
-			to_account_number: null,
-			to_account_phone: null,
-			to_account_inn: text,
-			to_account_bank_name: null
-		}
-		return handleTransfer10(data)
-	}
 }
 
 const askForAmount = async data => {
@@ -495,7 +540,7 @@ const getMoves = async data => {
 export {
 	handleTransfer5,
 	handleTransfer10,
-	getPayerAccount10,
+	askForAccount,
 	selectTochkaPayment,
 	askForInn,
 	askForAmount,

@@ -6,7 +6,7 @@ import tesseract from 'tesseract.js'
 import pdfParse from 'pdf-parse'
 import fs from 'fs'
 import axios from 'axios'
-import { handleTransfer5, getPayerAccount10, selectTochkaPayment, askForInn, askForAmount, askForDate } from './flows/handle-transfer.js'
+import { handleTransfer5, askForAccount, selectTochkaPayment, askForInn, askForAmount, askForDate } from './flows/handle-transfer.js'
 import { checkoutMove, requireCompensaton, transferAccounting0, selectEntity, transferAccounting15, transferAccounting5 } from './flows/transfer-accounting.js'
 import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany } from './src/company.js'
 import { endJob, getStore, getUser } from './src/user.js'
@@ -24,7 +24,7 @@ bot.on('text', async (msg) => {
 	data.msg = msg
 	if (data.state) switch (data.state) {
 		case 'get-payer-account-5':
-			getPayerAccount10(data)
+			askForAccount(data)
 			break
 		case 'ask-for-inn':
 			askForInn(data)
@@ -175,8 +175,8 @@ bot.on('callback_query', async (callbackData) => {
 		case 'select-tochka-payment':
 			selectTochkaPayment(data)
 			break
-		case 'get-payer-account-10':
-			getPayerAccount10(data)
+		case 'ask-for-account':
+			askForAccount(data)
 			break
 		case 'transfer-accounting-0':
 			transferAccounting0(data)
