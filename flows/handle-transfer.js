@@ -186,6 +186,10 @@ const getPayerAccount5 = async data => {
 						callback_data: `select-tochka-payment`
 					}],
 					[{
+						text: 'Ввести id перевода',
+						callback_data: `ask-for-transfer-id`
+					}],
+					[{
 						text: 'Закончить 🔚',
 						callback_data: `cancel`
 					}]]
@@ -195,6 +199,35 @@ const getPayerAccount5 = async data => {
 		data.state = 'get-payer-account-5'
 		data.result_field = 'from_account'
 		return setStore(data)
+	}
+}
+
+const askForTransferId = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const {  msg: { text }, state } = data
+
+	if (state !== 'ask-for-transfer-id') {
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Введите id перевода`,
+			{
+				reply_markup: {
+					inline_keyboard: [
+					[{
+						text: 'Закончить 🔚',
+						callback_data: `cancel`
+					}]]
+				}
+			}
+		)
+		data.state = 'ask-for-transfer-id'
+		return setStore(data)
+	}
+
+	else {
+		data.transfer = await getTransfer(parseInt(text))
+		data.transfer.was_existent = true
+		;['actions', 'state', 'result_field', 'ask_for_account'].forEach(k => delete data[k])
+		return checkoutTransfer(data)
 	}
 }
 
@@ -324,14 +357,6 @@ const askForInn = async data => {
 	}
 
 	else {
-		// data.input = {
-		// 	to_account_type: 'general',
-		// 	to_account_holder: null,
-		// 	to_account_number: null,
-		// 	to_account_phone: null,
-		// 	to_account_inn: text,
-		// 	to_account_bank_name: null
-		// }	
 		data.input = {}
 		data.actions = ['inn', text]
 		data.result_field = 'to_account'
@@ -469,9 +494,11 @@ const createTransfer = async data => {
 
 const getAccount = async id => db.one( "SELECT * FROM public.account WHERE id = $1", id )
 
+const getTransfer = async id => db.one( "SELECT * FROM public.transfer WHERE id = $1", id )
+
 const checkoutTransfer = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const {user, transfer, receipt, from_account, to_account} = data
+	const {user, transfer, from_account, to_account} = data
 	data.moves = await getMoves(data)
 	transfer.paid_total = data.moves.reduce((prev, cur, i) => prev + cur.paid, 0)
 	if (data.moves.length) {
@@ -540,6 +567,7 @@ const getMoves = async data => {
 export {
 	handleTransfer5,
 	handleTransfer10,
+	askForTransferId,
 	askForAccount,
 	selectTochkaPayment,
 	askForInn,

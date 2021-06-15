@@ -274,15 +274,15 @@ const checkoutMove = async data => {
 				inline_keyboard: [
 				...data.compensation
 					? [[{
-						text: 'Назначенная компенсация ШПС ⤵️',
+						text: 'Назначенная компенсация ⤵️',
 						callback_data: `transfer-accounting-0:${data.compensation.id}`
 					}]]
-					: data.to_org?.Inn !== '502238521208' && !move.compensation_for
+					: data.to_org?.Inn !== '502238521208'
 					? [[{
 						text: 'Запросить компенсацию у ИП ШПС ⤵️',
 						callback_data: `require-compensation:inn:502238521208`
 					}]]
-					: data.to_amo?.id !== 22575633 && !move.compensation_for
+					: data.to_amo?.id !== 22575633
 					? [[{
 						text: 'Запросить компенсацию у ШПС ⤵️',
 						callback_data: `require-compensation:amo_id:22575633`
