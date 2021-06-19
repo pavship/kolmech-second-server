@@ -47,6 +47,9 @@ bot.on('text', async (msg) => {
 		case 'transfer-accounting-10':
 			transferAccounting15(data)
 			break
+		case 'require-compensation':
+			requireCompensaton(data)
+			break
 		default:
 			console.log('unhandled state with data> ', data)
 	}

@@ -55,30 +55,33 @@ const parseText = async data => {
 	const bank = msg.document?.file_name.endsWith('.pdf') ? 'tinkoff' : 'sber'
 	const result = {
 		to_account_type: 'card',
-		to_account_inn: null,
-		to_account_bank_bik: null,
 		...(bank === 'sber') && {
 			from_account_bank_name: 'Сбер',
-			from_account_holder: null,
-			to_account_bank_name: null
 		},
 		...(bank === 'tinkoff') && {
 			from_account_bank_name: 'Тинькофф',
-			from_account_number: null
 		},
 	}
 	const regex =
 		(bank === 'sber') ? /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=.+MASTERCARD .+|ОТПРАВИТЕЛЬ:.+)(?<from_account_number>[0-9]{4})$|(?<=ПОЛУЧАТЕЛЬ:.+)(?<to_account_number>[0-9]{4})$|(?<=НОМЕР ТЕЛЕФОНА ПОЛУЧАТЕЛЯ: )(?<to_account_phone>.+)|(?<=СУММА ОПЕРАЦИИ: )(?<amount>.+) РУБ.|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|(?<=ФИО: )(?<to_account_holder>.+)/gm :
-		(bank === 'tinkoff') ? /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=ПереводКлиенту )(?<to_account_bank_name>.*)$|(?<=Получатель)(?<to_account_holder>.*)$|(?<=НОМЕР ТЕЛЕФОНА ПОЛУЧАТЕЛЯ: )(?<to_account_phone>.+)|(?<amount>.+)(?= iСумма)|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|(?<=Отправитель)(?<from_account_holder>.+)|(?<=Карта получателя\*)(?<to_account_number>[0-9]{4}$)/gm
+		(bank === 'tinkoff') ? /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=ПереводКлиенту |Банк получателя)(?<to_account_bank_name>.*)$|(?<=Получатель)(?<to_account_holder>.*)$|(?<=Телефон получателя)(?<to_account_phone>.+)|(?<amount>.+)(?= iСумма)|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|^(?<from_account_holder>.+)(?=Отправитель)|(?<=Карта получателя\*)(?<to_account_number>[0-9]{4}$)/gm
 		: null
 	for (const match of text.matchAll(regex)) {
 		for (const key in match.groups) {
 			if (!!match.groups[key]) result[key] = match.groups[key]
 		}
 	}
+	[
+		'to_account_number',
+		'to_account_inn',
+		'to_account_bank_bik',
+		'from_account_holder',
+		'from_account_number'
+	].forEach(k => { if (!result[k]) result[k] = null })
 	result.datetime = Date.parse(result.date.split('.').reverse().join('-') + 'T' + result.time + 'Z')/1000 - 3*3600 //Moscow time to Epoch
 	result.to_account_phone = result.to_account_phone?.replace(/[ |(|)|-]/g, '')
 	result.amount = result.amount?.replace(/ /g, '')
+	outputJson(result)
 	//#region schema
 	// console.log(functionName(), ' result > ', result)
 	// result >  {
@@ -160,12 +163,16 @@ const askForPayer = async data => {
 				reply_markup: {
 					inline_keyboard: [
 						...contacts.map(c => [{
-							text: `${c.name}`,
+							text: `👤 ${c.name}`,
 							callback_data: `ask-for-payer:amo_id:${c.id}`
 						}]),
 					[{
-						text: 'Подтянуть из Точки',
+						text: '🏦 Подтянуть из Точки',
 						callback_data: `select-tochka-payment`
+					}],
+					[{
+						text: '🏢 ИП ШПС',
+						callback_data: `ask-for-payer:inn:502238521208`
 					}],
 					// [{
 					// 	text: 'Ввести id перевода',
@@ -190,6 +197,11 @@ const askForPayer = async data => {
 	}
 
 	if (actions?.[0] === 'amo_id') return _askForAccountOfAmoId(actions[1])
+	if (actions?.[0] === 'inn') {
+		data.actions = ['inn', actions[1]]
+		data.result_field = 'from_account'
+		return askForAccount(data)
+	}
 
 	// transfer_id is assumed to be < 20000000
 	if (parseInt(text) < 20000000) {
@@ -334,7 +346,7 @@ const askForAccount = async data => {
 
 const askForPayee = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const {  msg: { text }, state } = data
+	const { msg: { text }, state } = data
 
 	if (state !== 'ask-for-payee') {
 		data.msg = await bot.sendMessage( data.user.chat_id,

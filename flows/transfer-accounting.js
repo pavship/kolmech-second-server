@@ -275,16 +275,20 @@ const checkoutMove = async data => {
 						text: 'Назначенная компенсация ⤵️',
 						callback_data: `transfer-accounting-0:${data.compensation.id}`
 					}]]
-					: data.to_org?.Inn !== '502238521208'
-					? [[{
-						text: 'Запросить компенсацию у ИП ШПС ⤵️',
-						callback_data: `require-compensation:inn:502238521208`
-					}]]
-					: data.to_amo?.id !== 22575633
-					? [[{
-						text: 'Запросить компенсацию у ШПС ⤵️',
-						callback_data: `require-compensation:amo_id:22575633`
-					}]] : [],
+					// : data.to_org?.Inn !== '502238521208'
+					// ? [[{
+					// 	text: 'Запросить компенсацию у ИП ШПС ⤵️',
+					// 	callback_data: `require-compensation:inn:502238521208`
+					// }]]
+					// : data.to_amo?.id !== 22575633
+					// ? [[{
+					// 	text: 'Запросить компенсацию у ШПС ⤵️',
+					// 	callback_data: `require-compensation:amo_id:22575633`
+					// }]] : [],
+					: [[{
+						text: 'Запросить компенсацию ⤵️',
+						callback_data: `require-compensation`
+					}]],
 				[{
 					text: 'Закончить 🔚',
 					callback_data: `cancel`
@@ -299,14 +303,31 @@ const checkoutMove = async data => {
 
 const requireCompensaton = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const {move, actions} = data
+	const { msg: { text }, actions, state, move } = data
 	let result
 
-	const counterparty_type = actions.shift()
+	if (state !== 'require-compensation') {
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Введите ИНН или AmoId контрагента, с которого требуется компенсация`,
+			{
+				reply_markup: {
+					inline_keyboard: [
+					[{
+						text: 'Закончить 🔚',
+						callback_data: `cancel`
+					}]]
+				}
+			}
+		)
+		data.state = 'require-compensation'
+		return setStore(data)
+	}
+
+	const counterparty_type =	text.length === 8 ? 'amo_id' : 'inn'
 	move.from_inn = move.to_inn
 	move.from_amo_id = move.to_amo_id
-	move.to_inn = counterparty_type === 'inn' ? actions.shift() : null
-	move.to_amo_id = counterparty_type === 'amo_id' ? actions.shift() : null
+	move.to_inn = counterparty_type === 'inn' ? text : null
+	move.to_amo_id = counterparty_type === 'amo_id' ? text : null
 
 	result = await db.one(
 		`INSERT INTO public.move(transfer_id, from_amo_id, from_inn, to_amo_id, to_inn, amount, paid, task_id, proj_id, compensation_for)
@@ -314,6 +335,7 @@ const requireCompensaton = async data => {
 		move
 	)
 
+	;['actions', 'state', 'result_field'].forEach(k => delete data[k])
 	checkoutMove({ ...data, move: { ...result, was_created: true }})
 }
 
