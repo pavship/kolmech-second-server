@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { createHmac } from 'crypto'
 import FormData from 'form-data'
+import { outputJson } from './utils.js'
 
 const v3credentials = {
 	access_token: '',
@@ -43,12 +44,12 @@ const megaplan_v3 = async ( method, uri, data ) => {
 		// console.log('megaplan v3 res.data > ', JSON.stringify(res.data, null, 2))
 		return res.data
 	} catch (err) {
-		console.log('megaplan v3 err.response > ', {
-			url: err.response.config.url,
-			status: err.response.status,
-			statusText: err.response.statusText,
-		})
-		// console.log('megaplan v3 err.response > ', err.response)
+		// console.log('megaplan v3 err.response > ', {
+		// 	url: err.response.config.url,
+		// 	status: err.response.status,
+		// 	statusText: err.response.statusText,
+		// })
+		console.log('megaplan v3 err.response > ', err)
 		return err
 	}
 }
@@ -476,6 +477,21 @@ const getTask = async id => (await megaplan_v3( 'GET', `/api/v3/task/${id}` )).d
 // }
 //#endregion
 
+const getCurrentTasks = async employee_id => (await megaplan_v3(
+	'GET',
+	`/api/v3/task?{"fields":["name","Category130CustomFieldPlanovieZatrati","parent","project"],"sortBy":[{"contentType":"SortField","fieldName":"Category130CustomFieldPlanovieZatrati","desc":true}],"filter":{"contentType":"TaskFilter","id":null,"config":{"contentType":"FilterConfig","termGroup":{"contentType":"FilterTermGroup","join":"and","terms":[{"contentType":"FilterTermRef","field":"responsible","comparison":"equals","value":[{"id":"${employee_id}","contentType":"Employee"}]},{"contentType":"FilterTermEnum","field":"status","comparison":"equals","value":["filter_any"]},{"contentType":"FilterTermEnum","field":"type","comparison":"equals","value":["task"]},{"contentType":"FilterTermEnum","field":"status","comparison":"not_equals","value":["filter_completed"]}]}}},"limit":25}`
+)).data || []
+
+const getCompletedUnpaidTasks = async employee_id => (await megaplan_v3(
+	'GET',
+	`/api/v3/task?{"fields":["name", "Category130CustomFieldPlanovieZatrati", "parent", "project"],"sortBy":[{"contentType":"SortField","fieldName":"Category130CustomFieldPlanovieZatrati","desc":true}],"filter":{"contentType":"TaskFilter","id":null,"config":{"contentType":"FilterConfig","termGroup":{"contentType":"FilterTermGroup","join":"and","terms":[{"contentType":"FilterTermRef","field":"responsible","comparison":"equals","value":[{"id":"${employee_id}","contentType":"Employee"}]},{"contentType":"FilterTermEnum","field":"type","comparison":"equals","value":["task"]},{"contentType":"FilterTermEnum","field":"status","comparison":"equals","value":["filter_completed"]},{"contentType":"FilterTermNumber","field":"Category130CustomFieldPlanovieZatrati","comparison":"more","value":0}]},"filterId":231}},"limit":25}`
+)).data || []
+
+const getTasksToPay = async employee_id => [
+	...await getCurrentTasks(employee_id),
+	...await getCompletedUnpaidTasks(employee_id)
+]
+
 const setTaskBudget = async (id, value) => (await megaplan_v3(
 	'POST',
 	`/api/v3/task/${id}`,
@@ -489,5 +505,6 @@ export {
 	megaplan_v3,
 	getTask,
 	getProj,
-	setTaskBudget
+	setTaskBudget,
+	getTasksToPay,
 }

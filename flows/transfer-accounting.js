@@ -1,10 +1,11 @@
 import { db } from '../src/postgres.js'
 import bot from '../bot.js'
 import { endJob, setStore } from './../src/user.js'
-import { getTask, getProj, megaplan_v3, setTaskBudget } from '../src/megaplan.js'
+import { getTask, getProj, megaplan_v3, setTaskBudget, getTasksToPay } from '../src/megaplan.js'
 import { outputJson, functionName, despace } from './../src/utils.js'
 import { amoBaseUrl, findAmoContacts, getAmoContact } from './../src/amo.js'
 import { getOrg } from '../src/moedelo.js'
+// outputJson(data) ; return endJob(data)
 
 const transferAccounting0 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
@@ -25,7 +26,7 @@ const transferAccounting0 = async data => {
 	
 	// 2. Find probable sellers
 	const from_amo_ids = (await db.any(
-		`SELECT from_amo_id FROM public.move
+		`SELECT DISTINCT from_amo_id FROM public.move
 		WHERE from_amo_id IS NOT NULL 
 		AND transfer_id IN ( SELECT id FROM public.transfer WHERE to_account_id = $1 )`,
 		data.to_account.id
@@ -71,13 +72,11 @@ const transferAccounting5 = async data => {
 	else {
 		data.move.from_amo_id = parseInt(text) || parseInt(actions.shift())
 		// 5. Find probable tasks
-		const employee = await db.oneOrNone( `SELECT * FROM public.users WHERE amo_id = $1`, data.move.from_amo_id )
-		if (employee) data.tasks = (await megaplan_v3( 'GET',
-			`/api/v3/task?{ "fields": [ "name", "Category130CustomFieldPlanovieZatrati", "parent", "project" ], "sortBy": [ { "contentType": "SortField", "fieldName": "Category130CustomFieldPlanovieZatrati", "desc": true } ], "filter": { "contentType": "TaskFilter", "id": null, "config": { "contentType": "FilterConfig", "termGroup": { "contentType": "FilterTermGroup", "join": "and", "terms": [ { "contentType": "FilterTermRef", "field": "responsible", "comparison": "equals", "value": [ { "id": "${employee.employee_id}", "contentType": "Employee" } ] }, { "contentType": "FilterTermEnum", "field": "status", "comparison": "equals", "value": [ "filter_any" ] }, { "contentType": "FilterTermEnum", "field": "type", "comparison": "equals", "value": [ "task" ] }, { "contentType": "FilterTermEnum", "field": "status", "comparison": "not_equals", "value": [ "filter_completed" ] } ] } } }, "limit": 25 }`
-		)).data
+		const employee_user = await db.oneOrNone( `SELECT * FROM public.users WHERE amo_id = $1`, data.move.from_amo_id )
+		data.tasks = employee_user ? await getTasksToPay(employee_user.employee_id) : []
 	}
 	if (await findRequiredCompensations(data)) {
-		data.tasks = [ ...data.tasks, ...await Promise.all(data.required_compensations.filter(m => m.task_id).map(async m => getTask(m.task_id))) ]
+		data.tasks = [ ...data.tasks || [], ...await Promise.all(data.required_compensations.filter(m => m.task_id).map(async m => getTask(m.task_id))) ]
 		data.projs = await Promise.all(data.required_compensations.filter(m => m.proj_id).map(async m => getProj(m.proj_id)))
 	}
 	
@@ -88,7 +87,7 @@ const transferAccounting5 = async data => {
 			reply_markup: {
 				inline_keyboard: [
 					...(data.tasks ? data.tasks.map(t => [{
-						text: `${t.humanNumber}. ${t.name} ${data.required_compensations.find(m => m.task_id == t.id) ? '⤵️' : ''}`,
+						text: `${t.status === 'assigned' ? '🟢' : t.status === 'completed' ? '⚪️' : t.status === 'done' ? '🔵' : t.status === 'accepted' ? '⚫️' : 'Неожиданный статус!'} ${t.humanNumber}. ${t.name} - ${t.Category130CustomFieldPlanovieZatrati} ₽ ${(t.compensation = data.required_compensations.find(m => m.task_id == t.id)) ? `⤵️ (move_id ${t.compensation.id})` : ''}`,
 						callback_data: `select-entity:task:${t.id}`
 					}]): []),
 					...(data.projs ? data.projs.map(p => [{
@@ -234,14 +233,13 @@ const createMove = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
 	const { move, task } = data
 	let result
+	outputJson(data)
 
 	result = await db.one(
 		`INSERT INTO public.move(transfer_id, from_amo_id, from_inn, to_amo_id, to_inn, amount, paid, task_id, proj_id)
 		VALUES ($<transfer_id>, $<from_amo_id>, $<from_inn>, $<to_amo_id>, $<to_inn>, $<amount>, $<paid>, $<task_id>, $<proj_id>) RETURNING *`,
 		move
 	)
-
-	// outputJson(data) //; return endJob(data)
 
 	if (task) await setTaskBudget(task.id, task.Category130CustomFieldPlanovieZatrati - move.paid)
 
