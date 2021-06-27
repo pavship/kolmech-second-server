@@ -312,10 +312,19 @@ const requireCompensaton = async data => {
 			{
 				reply_markup: {
 					inline_keyboard: [
-					[{
-						text: 'Закончить 🔚',
-						callback_data: `cancel`
-					}]]
+						[{
+							text: 'ИП ШПС',
+							callback_data: `require-compensation:inn:502238521208`
+						}],
+						[{
+							text: 'ШПС (ФЛ)',
+							callback_data: `require-compensation:amo_id:22575633`
+						}],
+						[{
+							text: 'Закончить 🔚',
+							callback_data: `cancel`
+						}],
+					]
 				}
 			}
 		)
@@ -323,11 +332,14 @@ const requireCompensaton = async data => {
 		return setStore(data)
 	}
 
-	const counterparty_type =	text.length === 8 ? 'amo_id' : 'inn'
+	const counterparty_type =	actions?.length
+		? actions[0]
+		:	text.length === 8 ? 'amo_id' : 'inn'
+	const counterparty_id = actions?.length ? actions[1] : text
 	move.from_inn = move.to_inn
 	move.from_amo_id = move.to_amo_id
-	move.to_inn = counterparty_type === 'inn' ? text : null
-	move.to_amo_id = counterparty_type === 'amo_id' ? text : null
+	move.to_inn = counterparty_type === 'inn' ? counterparty_id : null
+	move.to_amo_id = counterparty_type === 'amo_id' ? counterparty_id : null
 
 	result = await db.one(
 		`INSERT INTO public.move(transfer_id, from_amo_id, from_inn, to_amo_id, to_inn, amount, paid, task_id, proj_id, compensation_for)

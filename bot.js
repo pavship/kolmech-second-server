@@ -132,6 +132,7 @@ bot.on('document', async (msg) => {
 	}
 	if (msg.document.file_name.endsWith('.json')) {
 		data.receipt = (await axios.get(href)).data[0]
+		outputJson(data)
 	}
 	handleTransfer5(data)
 	return

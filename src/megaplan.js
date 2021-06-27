@@ -492,11 +492,15 @@ const getTasksToPay = async employee_id => [
 	...await getCompletedUnpaidTasks(employee_id)
 ]
 
-const setTaskBudget = async (id, value) => (await megaplan_v3(
-	'POST',
-	`/api/v3/task/${id}`,
-	{ id, contentType: "Task", Category130CustomFieldPlanovieZatrati: value}
-)).data
+const setTaskBudget = async (id, value) => {
+	const task = await getTask(id)
+	if (!task.Category130CustomFieldPlanovieZatrati || task.Category130CustomFieldPlanovieZatrati < 0) return
+	return (await megaplan_v3(
+		'POST',
+		`/api/v3/task/${id}`,
+		{ id, contentType: "Task", Category130CustomFieldPlanovieZatrati: value}
+	)).data
+}
 
 const getProj = async id => (await megaplan_v3( 'GET', `/api/v3/project/${id}` )).data
 

@@ -9,6 +9,7 @@ import Docxtemplater from 'docxtemplater'
 import fs from 'fs'
 import axios from 'axios'
 import { getOrg } from './moedelo.js'
+import { outputJson } from './utils.js'
 
 const companiesDirPath = '/Компании'
 
@@ -16,6 +17,7 @@ export async function handleCompany(data) {
 	const { user, msg } = data
 	const id = msg.text.match(/detail\/(\d+)/)[1]
 	data.company = await findAmoCompany(id)
+	//#region schema
 	// console.log('company > ', JSON.stringify(data.company, null, 2))
 	// company >  {
 	// 	id: 88252187,
@@ -117,6 +119,7 @@ export async function handleCompany(data) {
 	// 	customers: {},
 	// 	_links: { self: { href: '/api/v2/companies?id=88252187', method: 'get' } }
 	// }
+	//#endregion
 	if (!data.company) return endJob(data, `Не удалось найти компанию с id = ${id}`)
 	data.msg = await bot.sendMessage(user.chat_id, `${data.company.name}. Выберите действие`,
 		{
@@ -150,7 +153,8 @@ export async function createPostInlet5(data) {
 	const { user, company } = data
 	data.inn = company.custom_fields.find(cf => cf.name === 'ИНН')?.values?.[0]?.value
 	if (!data.inn) return endJob(data, `В карточке компании нет ИНН`)
-	data.org = getOrg(data.inn)
+	data.org = await getOrg(data.inn)
+	//#region schema
 	// console.log('data.org > ', JSON.stringify(data.org, null, 2))
 	// data.org >  [
 	// 	{
@@ -178,6 +182,7 @@ export async function createPostInlet5(data) {
 	// 		"PersonalData": ""
 	// 	}
 	// ]
+	//#endregion
 	data.postAddress = company.custom_fields.find(cf => cf.name === 'Почтовый адрес')?.values?.[0]?.value
 		|| data.org.ActualAddress
 		|| data.org.LegalAddress
@@ -187,6 +192,7 @@ export async function createPostInlet5(data) {
 	data.contacts = company.contacts
 		? (await (await amoConnect()).get(company.contacts._links.self.href)).data._embedded.items
 		: null
+	//#region schema
 	// console.log('contacts > ', JSON.stringify(data.contacts, null, 2))
 	// contacts > [
 	// 	{
@@ -628,6 +634,7 @@ export async function createPostInlet5(data) {
 	// 		}
 	// 	}
 	// ]
+	//#endregion
 	// return contacts.length ? contacts[0] : null
 	if (!data.contacts) return createPostInlet10(data)
 	data.msg = await bot.sendMessage(user.chat_id,

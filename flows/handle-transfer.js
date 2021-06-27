@@ -64,17 +64,18 @@ const parseText = async data => {
 	}
 	const regex =
 		(bank === 'sber') ? /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=.+MASTERCARD .+|ОТПРАВИТЕЛЬ:.+)(?<from_account_number>[0-9]{4})$|(?<=ПОЛУЧАТЕЛЬ:.+)(?<to_account_number>[0-9]{4})$|(?<=НОМЕР ТЕЛЕФОНА ПОЛУЧАТЕЛЯ: )(?<to_account_phone>.+)|(?<=СУММА ОПЕРАЦИИ: )(?<amount>.+) РУБ.|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|(?<=ФИО: )(?<to_account_holder>.+)/gm :
-		(bank === 'tinkoff') ? /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=ПереводКлиенту |Банк получателя)(?<to_account_bank_name>.*)$|(?<=Получатель)(?<to_account_holder>.*)$|(?<=Телефон получателя)(?<to_account_phone>.+)|(?<amount>.+)(?= iСумма)|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|^(?<from_account_holder>.+)(?=Отправитель)|(?<=Карта получателя\*)(?<to_account_number>[0-9]{4}$)/gm
+		(bank === 'tinkoff') ? /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=ПереводКлиенту |Банк получателя)(?<to_account_bank_name>.*)$|(?<=Получатель)(?<to_account_holder>.*)$|(?<=Телефон получателя)(?<to_account_phone>.+)|(?<amount>.+)(?= iСумма)|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|^(?<from_account_holder>.+)(?=Отправитель)|(?<=Отправитель)(?<from_account_holder_>.*)$|(?<=Карта получателя\*)(?<to_account_number>[0-9]{4}$)/gm
 		: null
 	for (const match of text.matchAll(regex)) {
 		for (const key in match.groups) {
-			if (!!match.groups[key]) result[key] = match.groups[key]
+			if (!!match.groups[key]) result[key.replace(/_$/, '')] = match.groups[key]
 		}
 	}
 	[
 		'to_account_number',
 		'to_account_inn',
 		'to_account_bank_bik',
+		'to_account_bank_name',
 		'from_account_holder',
 		'from_account_number'
 	].forEach(k => { if (!result[k]) result[k] = null })
