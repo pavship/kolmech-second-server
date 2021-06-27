@@ -7,7 +7,7 @@ import pdfParse from 'pdf-parse'
 import fs from 'fs'
 import axios from 'axios'
 import { handleTransfer5, askForAccount, selectTochkaPayment, askForPayee, askForAmount, askForDate, askForTransferId, askForPayer } from './flows/handle-transfer.js'
-import { checkoutMove, requireCompensaton, transferAccounting0, selectEntity, transferAccounting15, transferAccounting5 } from './flows/transfer-accounting.js'
+import { checkoutMove, requireCompensaton, transferAccounting0, selectEntity, transferAccounting15, transferAccounting5, askForSeller } from './flows/transfer-accounting.js'
 import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany } from './src/company.js'
 import { endJob, getStore, getUser } from './src/user.js'
 import { outputJson } from './src/utils.js'
@@ -38,8 +38,8 @@ bot.on('text', async (msg) => {
 		case 'ask-for-date':
 			askForDate(data)
 			break
-		case 'transfer-accounting-0':
-			transferAccounting5(data)
+		case 'ask-for-seller':
+			askForSeller(data)
 			break
 		case 'select-entity':
 			selectEntity(data)

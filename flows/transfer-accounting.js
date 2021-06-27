@@ -9,7 +9,7 @@ import { getOrg } from '../src/moedelo.js'
 
 const transferAccounting0 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { to_org, actions } = data
+	const { actions } = data
 	const edit_move_id = parseInt(actions.shift())
 	if (edit_move_id) return checkoutMove({ ...data, move: await db.one("SELECT * FROM public.move WHERE id = $1", edit_move_id) })
 
@@ -23,54 +23,64 @@ const transferAccounting0 = async data => {
 		task_id: null,
 		proj_id: null,
 	}
-	
-	// 2. Find probable sellers
-	const from_amo_ids = (await db.any(
-		`SELECT DISTINCT from_amo_id FROM public.move
-		WHERE from_amo_id IS NOT NULL 
-		AND transfer_id IN ( SELECT id FROM public.transfer WHERE to_account_id = $1 )`,
-		data.to_account.id
-	)).reduce((prev, { from_amo_id }) => `${prev},${from_amo_id}`, '')
-	console.log('from_amo_ids > ', from_amo_ids)
-	data.contacts = from_amo_ids.length
-		? await findAmoContacts({ id: from_amo_ids })
-		: []
-	// 3. Ask for seller
-	data.msg = await bot.sendMessage( data.user.chat_id,
-		`Выберите продавца/исполнителя или введите AmoId последнего.`,
-		{
-			reply_markup: {
-				inline_keyboard: [
-					...data.contacts.map(c => [{
-						text: c.name,
-						callback_data: `transfer-accounting-5:${c.id}`
-					}]),
-					...!!to_org ? [[{
-						text: `🏢: ${to_org.ShortName} (ИНН: ${to_org.Inn})`,
-						callback_data: `transfer-accounting-5:org`
-					}]] : [],
-				[{
-					text: 'Закончить 🔚',
-					callback_data: `cancel`
-				}]]
+
+	askForSeller(data)
+}
+
+const askForSeller = async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const { msg: { text }, actions, state, move, to_org } = data
+
+	if (state !== 'ask-for-seller') {
+		const from_amo_ids = (await db.any(
+			`SELECT DISTINCT from_amo_id FROM public.move
+			WHERE from_amo_id IS NOT NULL 
+			AND transfer_id IN ( SELECT id FROM public.transfer WHERE to_account_id = $1 )`,
+			data.to_account.id
+		)).reduce((prev, { from_amo_id }) => `${prev},${from_amo_id}`, '')
+		data.contacts = from_amo_ids.length
+			? await findAmoContacts({ id: from_amo_ids })
+			: []
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Выберите продавца/исполнителя или введите AmoId или ИНН последнего.`,
+			{
+				reply_markup: {
+					inline_keyboard: [
+						...data.contacts.map(c => [{
+							text: c.name,
+							callback_data: `ask-for-seller:amo_id:${c.id}`
+						}]),
+						...!!to_org ? [[{
+							text: `🏢: ${to_org.ShortName} (ИНН: ${to_org.Inn})`,
+							callback_data: `ask-for-seller:inn:${to_org.Inn}`
+						}]] : [],
+					[{
+						text: 'Закончить 🔚',
+						callback_data: `cancel`
+					}]]
+				}
 			}
-		}
-	)
-	data.state = 'transfer-accounting-0'
-	return setStore(data)
+		)
+		data.state = 'ask-for-seller'
+		return setStore(data)
+	}
+
+	const counterparty_type =	actions?.length
+		? actions[0]
+		:	text.length === 8 ? 'amo_id' : 'inn'
+	const counterparty_id = actions?.length ? actions[1] : text
+	move.from_inn = counterparty_type === 'inn' ? counterparty_id : null
+	move.from_amo_id = counterparty_type === 'amo_id' ? counterparty_id : null
+
+	;['actions', 'state', 'result_field'].forEach(k => delete data[k])
+	transferAccounting5(data)
 }
 
 const transferAccounting5 = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
-	const { msg: { text }, actions, to_org } = data
+	const { move } = data
 
-	// 4. TODO Validate answer
-
-	if (actions?.[0] === 'org') {
-		data.move.from_inn = to_org.Inn
-	}
-	else {
-		data.move.from_amo_id = parseInt(text) || parseInt(actions.shift())
+	if (move.from_amo_id) {
 		// 5. Find probable tasks
 		const employee_user = await db.oneOrNone( `SELECT * FROM public.users WHERE amo_id = $1`, data.move.from_amo_id )
 		data.tasks = employee_user ? await getTasksToPay(employee_user.employee_id) : []
@@ -275,16 +285,6 @@ const checkoutMove = async data => {
 						text: 'Назначенная компенсация ⤵️',
 						callback_data: `transfer-accounting-0:${data.compensation.id}`
 					}]]
-					// : data.to_org?.Inn !== '502238521208'
-					// ? [[{
-					// 	text: 'Запросить компенсацию у ИП ШПС ⤵️',
-					// 	callback_data: `require-compensation:inn:502238521208`
-					// }]]
-					// : data.to_amo?.id !== 22575633
-					// ? [[{
-					// 	text: 'Запросить компенсацию у ШПС ⤵️',
-					// 	callback_data: `require-compensation:amo_id:22575633`
-					// }]] : [],
 					: [[{
 						text: 'Запросить компенсацию ⤵️',
 						callback_data: `require-compensation`
@@ -353,6 +353,7 @@ const requireCompensaton = async data => {
 
 export {
 	transferAccounting0,
+	askForSeller,
 	transferAccounting5,
 	selectEntity,
 	transferAccounting15,
