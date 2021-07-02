@@ -1,5 +1,23 @@
 import fs from 'fs'
 
+let logger_counter = 0
+emptyDebugLog()
+
+function emptyDebugLog() {
+	try {
+		fs.writeFileSync('./outputlog.json', '[]')
+	} catch (err) {}
+}
+
+function debugLog(data) {
+	let log_chain = []
+	try {
+		log_chain = JSON.parse(fs.readFileSync('./outputlog.json', 'utf8'))
+	} catch (err) {}
+	log_chain[logger_counter++] = data
+	fs.writeFileSync('./outputlog.json', JSON.stringify(log_chain, null, 2))
+}
+
 function outputJson(obj) {
 	fs.writeFileSync('./output.json', JSON.stringify(obj, null, 2))
 }
@@ -39,6 +57,8 @@ function despace(strings, ...placeholders) {
 }
 
 export {
+	emptyDebugLog,
+	debugLog,
 	outputJson,
 	functionName,
 	despace

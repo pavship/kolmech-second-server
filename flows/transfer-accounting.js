@@ -2,13 +2,13 @@ import { db } from '../src/postgres.js'
 import bot from '../bot.js'
 import { endJob, setStore } from './../src/user.js'
 import { getTask, getProj, megaplan_v3, setTaskBudget, getTasksToPay } from '../src/megaplan.js'
-import { outputJson, functionName, despace } from './../src/utils.js'
+import { outputJson, functionName, despace, debugLog } from './../src/utils.js'
 import { amoBaseUrl, findAmoContacts, getAmoContact } from './../src/amo.js'
 import { getOrg } from '../src/moedelo.js'
 // outputJson(data) ; return endJob(data)
 
 const transferAccounting0 = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
 	const { actions } = data
 	const edit_move_id = parseInt(actions.shift())
 	if (edit_move_id) return checkoutMove({ ...data, move: await db.one("SELECT * FROM public.move WHERE id = $1", edit_move_id) })
@@ -28,7 +28,7 @@ const transferAccounting0 = async data => {
 }
 
 const askForSeller = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
 	const { msg: { text }, actions, state, move, to_org } = data
 
 	if (state !== 'ask-for-seller') {
@@ -77,8 +77,9 @@ const askForSeller = async data => {
 }
 
 const transferAccounting5 = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
 	const { move } = data
+	outputJson(data)
 
 	if (move.from_amo_id) {
 		// 5. Find probable tasks
@@ -127,7 +128,7 @@ const findRequiredCompensations = async data => {
 }
 
 const selectEntity = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
 	const { msg: { text }, actions, move, user } = data
 
 	const text_input_id = parseInt(text)
@@ -135,8 +136,8 @@ const selectEntity = async data => {
 		const task = await getTask(text_input_id)
 		const proj = await getProj(text_input_id)
 		console.log('task, proj > ', task, proj)
-		if (task && !proj) return askForAmount({ ...data, task })
-		if (proj && !task) return askForAmount({ ...data, proj })
+		if (task && !proj) return delete data.proj && askForAmount({ ...data, task })
+		if (proj && !task) return delete data.task && askForAmount({ ...data, proj })
 		data.msg = await bot.sendMessage( user.chat_id,
 			`Уазанному id соответствуют задача и проект. Уточните выбор`,
 			{
@@ -170,13 +171,9 @@ const selectEntity = async data => {
 }
 
 const askForAmount = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
-	const { transfer, task } = data
-	// const { msg: { text }, actions, move, transfer, task, proj } = data
-	// move.task_id = parseInt(text) || parseInt(actions.shift())
-	// data.task = data.tasks?.find(t => t.id == move.task_id)
-	// 	|| await getTask(move.task_id)
-	data.required_compensation = data.required_compensations.find(m => m.task_id == task?.id)
+	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
+	const { transfer, task, proj } = data
+	data.required_compensation = data.required_compensations.find(m => m.task_id == task?.id && !m.proj_id || m.proj_id == proj?.id  && !m.task_id)
 
 	// 7. TODO Check answer
 	
@@ -210,7 +207,7 @@ const askForAmount = async data => {
 }
 
 const transferAccounting15 = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
 	const { msg: { text }, actions, move, task, proj } = data
 	move.amount = move.paid = parseFloat(text) || parseFloat(actions.shift())
 	if (task) move.task_id = task.id
@@ -228,7 +225,7 @@ const transferAccounting15 = async data => {
 }
 
 const allocateCompensation = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
 	let result
 
 	result = await db.one(
@@ -240,10 +237,9 @@ const allocateCompensation = async data => {
 }
 
 const createMove = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
 	const { move, task } = data
 	let result
-	outputJson(data)
 
 	result = await db.one(
 		`INSERT INTO public.move(transfer_id, from_amo_id, from_inn, to_amo_id, to_inn, amount, paid, task_id, proj_id)
@@ -257,7 +253,7 @@ const createMove = async data => {
 }
 
 const checkoutMove = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
 	const {user, move} = data
 	data.from_amo = data.to_amo = data.from_org = data.to_org = data.compensation = undefined
 	if (move.from_amo_id) data.from_amo = await getAmoContact(move.from_amo_id)
@@ -302,7 +298,7 @@ const checkoutMove = async data => {
 }
 
 const requireCompensaton = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
 	const { msg: { text }, actions, state, move } = data
 	let result
 
@@ -354,7 +350,6 @@ const requireCompensaton = async data => {
 export {
 	transferAccounting0,
 	askForSeller,
-	transferAccounting5,
 	selectEntity,
 	transferAccounting15,
 	checkoutMove,

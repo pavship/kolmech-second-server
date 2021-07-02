@@ -7,7 +7,7 @@ import pdfParse from 'pdf-parse'
 import fs from 'fs'
 import axios from 'axios'
 import { handleTransfer5, askForAccount, selectTochkaPayment, askForPayee, askForAmount, askForDate, askForTransferId, askForPayer } from './flows/handle-transfer.js'
-import { checkoutMove, requireCompensaton, transferAccounting0, selectEntity, transferAccounting15, transferAccounting5, askForSeller } from './flows/transfer-accounting.js'
+import { checkoutMove, requireCompensaton, transferAccounting0, selectEntity, transferAccounting15, askForSeller } from './flows/transfer-accounting.js'
 import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany } from './src/company.js'
 import { endJob, getStore, getUser } from './src/user.js'
 import { outputJson } from './src/utils.js'
@@ -109,7 +109,7 @@ bot.on('document', async (msg) => {
 	}
 
 	const href = await bot.getFileLink(msg.document.file_id)
-	if (msg.document.file_name.endsWith('.pdf')) {
+	if (msg.document.file_name.toLowerCase().endsWith('.pdf')) {
 		const { data: doc } = await axios.get( href, { responseType: 'arraybuffer'} )
 		data.text = (await pdfParse(doc)).text
 		//#region schema
@@ -194,8 +194,8 @@ bot.on('callback_query', async (callbackData) => {
 		case 'transfer-accounting-0':
 			transferAccounting0(data)
 			break
-		case 'transfer-accounting-5':
-			transferAccounting5(data)
+		case 'ask-for-seller':
+			askForSeller(data)
 			break
 		case 'select-entity':
 			selectEntity(data)

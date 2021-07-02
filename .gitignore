@@ -2,7 +2,7 @@
 *.traineddata
 
 # Test Files
-/output.*
+/output*
 
 # Logs
 logs

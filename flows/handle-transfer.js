@@ -52,8 +52,12 @@ const parseText = async data => {
 	if (process.env.debug) console.log(functionName(), '>')
 	const { text, msg } = data
 	
-	const bank = msg.document?.file_name.endsWith('.pdf') ? 'tinkoff' : 'sber'
+	const bank = 
+		msg.document?.file_name.endsWith('.pdf') ? 'tinkoff' : 
+		msg.document?.file_name.endsWith('.Pdf') ? 'vtb'
+		: 'sber'
 	const result = {
+		from_account_type: 'card',
 		to_account_type: 'card',
 		...(bank === 'sber') && {
 			from_account_bank_name: 'Сбер',
@@ -61,10 +65,19 @@ const parseText = async data => {
 		...(bank === 'tinkoff') && {
 			from_account_bank_name: 'Тинькофф',
 		},
+		...(bank === 'vtb') && {
+			from_account_bank_name: 'ВТБ',
+			from_account_type: 'bank',
+			to_account_type: 'bank',
+			to_account_inn: '502238521208',
+			date: msg.document?.file_name.slice(-14,-4).split('-').join('.'),
+			time: '00:00:00'
+		},
 	}
 	const regex =
 		(bank === 'sber') ? /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=.+MASTERCARD .+|ОТПРАВИТЕЛЬ:.+)(?<from_account_number>[0-9]{4})$|(?<=ПОЛУЧАТЕЛЬ:.+)(?<to_account_number>[0-9]{4})$|(?<=НОМЕР ТЕЛЕФОНА ПОЛУЧАТЕЛЯ: )(?<to_account_phone>.+)|(?<=СУММА ОПЕРАЦИИ: )(?<amount>.+) РУБ.|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|(?<=ФИО: )(?<to_account_holder>.+)/gm :
-		(bank === 'tinkoff') ? /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=ПереводКлиенту |Банк получателя)(?<to_account_bank_name>.*)$|(?<=Получатель)(?<to_account_holder>.*)$|(?<=Телефон получателя)(?<to_account_phone>.+)|(?<amount>.+)(?= iСумма)|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|^(?<from_account_holder>.+)(?=Отправитель)|(?<=Отправитель)(?<from_account_holder_>.*)$|(?<=Карта получателя\*)(?<to_account_number>[0-9]{4}$)/gm
+		(bank === 'tinkoff') ? /(?<date>[0-9]{2}.[0-9]{2}.[0-9]{4})|(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2})|(?<=ПереводКлиенту |Банк получателя)(?<to_account_bank_name>.*)$|(?<=Получатель)(?<to_account_holder>.*)$|(?<=Телефон получателя)(?<to_account_phone>.+)|(?<amount>.+)(?= iСумма)|(?<=КОМИССИЯ: )(?<bank_fee>.+) РУБ.|^(?<from_account_holder>.+)(?=Отправитель)|(?<=Отправитель)(?<from_account_holder_>.*)$|(?<=Карта получателя\*)(?<to_account_number>[0-9]{4}$)/gm :
+		(bank === 'vtb') ? /(?<from_account_number>[0-9]{20})$|(?<to_account_number>[0-9]{4})$|^(?<to_account_bank_name>.*)$(?=\nБанк-получатель)|^(?<amount>.*)$(?=\nСумма в рублях)|^(?<bank_fee>.*)$(?=\nКомиссия)/gm
 		: null
 	for (const match of text.matchAll(regex)) {
 		for (const key in match.groups) {
@@ -79,9 +92,12 @@ const parseText = async data => {
 		'from_account_holder',
 		'from_account_number'
 	].forEach(k => { if (!result[k]) result[k] = null })
-	result.datetime = Date.parse(result.date.split('.').reverse().join('-') + 'T' + result.time + 'Z')/1000 - 3*3600 //Moscow time to Epoch
+	result.datetime = result.date
+		? Date.parse(result.date.split('.').reverse().join('-') + 'T' + result.time + 'Z')/1000 - 3*3600 //Moscow time to Epoch
+		: null
 	result.to_account_phone = result.to_account_phone?.replace(/[ |(|)|-]/g, '')
-	result.amount = result.amount?.replace(/ /g, '')
+	result.amount = result.amount?.replaceAll(/ | |₽/g, '').replace(',', '.')
+	result.bank_fee = result.bank_fee?.replaceAll(/ | |₽/g, '').replace(',', '.')
 	outputJson(result)
 	//#region schema
 	// console.log(functionName(), ' result > ', result)
@@ -115,7 +131,7 @@ const parseText = async data => {
 	//#endregion
 	data.from_account = await db.one(
 		`SELECT * FROM public.account
-		WHERE type = 'card'
+		WHERE type = $<from_account_type>
 		AND bank_name = $<from_account_bank_name>
 		AND (number LIKE '%'||$<from_account_number> OR holder = $<from_account_holder>)`,
 		result
@@ -156,14 +172,12 @@ const askForPayer = async data => {
 	const {  msg: { text }, state, actions } = data
 	
 	if (state !== 'ask-for-payer') {
-		const usersAmoIds = await db.map( "SELECT amo_id FROM public.users", [], r => r.amo_id )
-		const contacts = await findAmoContacts({ id: usersAmoIds })
 		data.msg = await bot.sendMessage( data.user.chat_id,
 			`Введите transfer_id или выберите плательщика или введите AmoId последнего`,
 			{
 				reply_markup: {
 					inline_keyboard: [
-						...contacts.map(c => [{
+						...(await getUsersContacts(data)).map(c => [{
 							text: `👤 ${c.name}`,
 							callback_data: `ask-for-payer:amo_id:${c.id}`
 						}]),
@@ -175,10 +189,6 @@ const askForPayer = async data => {
 						text: '🏢 ИП ШПС',
 						callback_data: `ask-for-payer:inn:502238521208`
 					}],
-					// [{
-					// 	text: 'Ввести id перевода',
-					// 	callback_data: `ask-for-transfer-id`
-					// }],
 					[{
 						text: 'Закончить 🔚',
 						callback_data: `cancel`
@@ -187,7 +197,6 @@ const askForPayer = async data => {
 			}
 		)
 		data.state = 'ask-for-payer'
-		
 		return setStore(data)
 	}
 
@@ -213,6 +222,17 @@ const askForPayer = async data => {
 	}
 	// amo_id is assumed to be > 20000000
 	else return _askForAccountOfAmoId(text)
+}
+
+const getUsersContacts =  async data => {
+	if (process.env.debug) console.log(functionName(), '>')
+	const { usersContacts } = data
+	if (usersContacts) return usersContacts
+
+	const usersAmoIds = await db.map( "SELECT amo_id FROM public.users", [], r => r.amo_id )
+	data.usersContacts = await findAmoContacts({ id: usersAmoIds })
+
+	return data.usersContacts
 }
 
 const askForTransferId = async data => {
@@ -303,8 +323,9 @@ const askForAccount = async data => {
 			cache.id
 		)
 		const general_account = cache.accounts.find(a => a.type === 'general')
+		const cash_account = cache.accounts.find(a => a.type === 'cash')
 		data.msg = await bot.sendMessage( data.user.chat_id,
-			`Выберите счёт получателя платежа`,
+			`Выберите счёт ${result_field === 'to_account' ? 'получателя' : 'отправителя'} платежа`,
 			{
 				reply_markup: {
 					inline_keyboard: [
@@ -315,12 +336,16 @@ const askForAccount = async data => {
 								a.type === 'cash' ? '💰' :
 								a.type === 'general' ? 'Какой-то счёт (невозможно узнать)' : 
 								'Тип счета неопределен (Ошибка системы!)'
-							} ${a.bank_name} ${a.number}`,
+							} ${a.bank_name} ${a.note || ''} ${a.number}`,
 							callback_data: `ask-for-account:${a.id}`
 						}]),
+						...!cash_account ? [[{
+							text: '💰',
+							callback_data: `ask-for-account:create-account:cash`
+						}]] : [],
 						...!general_account ? [[{
 							text: 'Какой-то счёт (невозможно узнать)',
-							callback_data: `ask-for-account:create-general-account`
+							callback_data: `ask-for-account:create-account:general`
 						}]] : [],
 					[{
 						text: 'Закончить 🔚',
@@ -333,15 +358,16 @@ const askForAccount = async data => {
 		return setStore(data)
 	}
 
-	const param = actions.shift()
-	data[result_field] = param === 'create-general-account'
+	const param = actions[0]
+	data[result_field] = param === 'create-account'
 		? await db.one(
-			`INSERT INTO public.account(type, ${cache.id_type}) VALUES('general', $1) RETURNING *`,
-			cache.id
+			`INSERT INTO public.account(type, ${cache.id_type}) VALUES($1, $2) RETURNING *`,
+			[actions[1], cache.id]
 		)
 		: cache.accounts.find(a => a.id === parseInt(param))
 
 	;['actions', 'state', 'result_field', 'ask_for_account'].forEach(k => delete data[k])
+	outputJson(data)
 	return handleTransfer10(data)
 }
 
@@ -355,6 +381,10 @@ const askForPayee = async data => {
 			{
 				reply_markup: {
 					inline_keyboard: [
+						...(await getUsersContacts(data)).map(c => [{
+							text: `👤 ${c.name}`,
+							callback_data: `ask-for-account:amo_id:${c.id}`
+						}]),
 					[{
 						text: 'Закончить 🔚',
 						callback_data: `cancel`
@@ -362,15 +392,15 @@ const askForPayee = async data => {
 				}
 			}
 		)
+		data.input = {} // main handleTransfer thread logic
+		data.result_field = 'to_account'
 		data.state = 'ask-for-payee'
 		return setStore(data)
 	}
 
 	const counterparty_type =	text.length === 8 ? 'amo_id' : 'inn'
 
-	data.input = {}
 	data.actions = [counterparty_type, text]
-	data.result_field = 'to_account'
 	return askForAccount(data)
 }
 
@@ -386,6 +416,7 @@ const getPayeeAccount = async data => {
 		AND holder ${!!input.to_account_holder ? '= $<to_account_holder>' : 'IS NULL'}
 		AND number ${!!input.to_account_number ? "LIKE '%'||$<to_account_number>" : 'IS NULL'}
 		AND phone ${!!input.to_account_phone ? '= $<to_account_phone>::VARCHAR(12)' : 'IS NULL'}`
+	console.log('query > ', query)
 	result = await db.oneOrNone(query, input)
 		|| await db.one(
 				`INSERT INTO public.account(type, holder, number, phone, inn, bank_name, bank_bik)

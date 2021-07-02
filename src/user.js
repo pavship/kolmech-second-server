@@ -1,5 +1,6 @@
 import { pgQuery } from './postgres.js'
 import bot from '../bot.js'
+import { emptyDebugLog } from './utils.js'
 
 export async function getUser(chat_id) {
 	let result
@@ -42,5 +43,6 @@ export async function clearStore(chat_id) {
 
 export async function endJob(data, text) {
 	clearStore(data.user.chat_id)
+	emptyDebugLog()
 	bot.sendMessage(data.user.chat_id, `${text ? text + '. ' : ''}Работа завершена`)
 }
