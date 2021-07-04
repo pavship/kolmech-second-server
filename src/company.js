@@ -153,7 +153,7 @@ export async function createPostInlet5(data) {
 	const { user, company } = data
 	data.inn = company.custom_fields.find(cf => cf.name === 'ИНН')?.values?.[0]?.value
 	if (!data.inn) return endJob(data, `В карточке компании нет ИНН`)
-	data.org = await getOrg(data.inn)
+	data.org = await getOrg({ inn: data.inn })
 	//#region schema
 	// console.log('data.org > ', JSON.stringify(data.org, null, 2))
 	// data.org >  [

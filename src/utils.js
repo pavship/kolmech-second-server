@@ -1,21 +1,26 @@
 import fs from 'fs'
 
-let logger_counter = 0
 emptyDebugLog()
+outputJson({})
 
 function emptyDebugLog() {
 	try {
-		fs.writeFileSync('./outputlog.json', '[]')
+		fs.writeFileSync('./outputlog.json', '{}')
 	} catch (err) {}
 }
 
-function debugLog(data) {
-	let log_chain = []
+function debugLog(func_name, data) {
+	console.log(func_name, '>')
+	let log_obj = {}
 	try {
-		log_chain = JSON.parse(fs.readFileSync('./outputlog.json', 'utf8'))
+		log_obj = JSON.parse(fs.readFileSync('./outputlog.json', 'utf8'))
 	} catch (err) {}
-	log_chain[logger_counter++] = data
-	fs.writeFileSync('./outputlog.json', JSON.stringify(log_chain, null, 2))
+	let appearance_counter = 0
+	for (const key in log_obj) {
+		if (key.startsWith(func_name)) appearance_counter++
+	}
+	log_obj[`${func_name}_${appearance_counter}`] = data
+	fs.writeFileSync('./outputlog.json', JSON.stringify(log_obj, null, 2))
 }
 
 function outputJson(obj) {

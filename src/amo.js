@@ -113,9 +113,28 @@ const getAmoContacts = async () => {
 
 const findAmoCompany = async text => {
 	const result = 
-		(await (await amoConnect()).get('/api/v2/companies', { params: { query: text } })).data?._embedded?.items
-		|| (await (await amoConnect()).get(`/api/v2/companies?id=${text}`)).data?._embedded?.items
-	return result?.[0] || null
+		(await (await amoConnect()).get('/api/v2/companies', { params: { query: text } })).data?._embedded?.items?.[0]
+		|| (await (await amoConnect()).get(`/api/v2/companies?id=${text}`)).data?._embedded?.items?.[0]
+		|| null
+	return result
+}
+
+const findAmoDeals = async params => {
+	const { data: { _embedded } } = await (await amoConnect())
+		.get('/api/v2/leads', { params })
+	const result = _embedded?.items || []
+	return result
+}
+
+const getAmoStatuses = async () => {
+	const result = (await (await amoConnect())
+			.get('/api/v2/pipelines?id=1593157')
+		).data?._embedded?.items?.['1593157']?.statuses
+		|| null
+	// const { data: { _embedded } } = res
+	// console.log('res.data > ', res.data)
+	// const result = _embedded?.items || []
+	return result
 }
 
 export {
@@ -124,5 +143,7 @@ export {
 	getAmoContact,
 	findAmoContacts,
 	getAmoContacts,
-	findAmoCompany
+	findAmoCompany,
+	findAmoDeals,
+	getAmoStatuses
 }

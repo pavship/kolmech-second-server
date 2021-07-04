@@ -1,7 +1,7 @@
 import { db } from '../src/postgres.js'
 import bot from '../bot.js'
 import { endJob, setStore } from '../src/user.js'
-import { outputJson, functionName, despace } from '../src/utils.js'
+import { outputJson, functionName, despace, debugLog } from '../src/utils.js'
 import { amoBaseUrl, findAmoContacts, getAmoContact } from '../src/amo.js'
 import { getOrg } from '../src/moedelo.js'
 import { getProj, getTask } from '../src/megaplan.js'
@@ -9,7 +9,7 @@ import { getTochkaPayments } from '../src/tochka.js'
 // outputJson(data); // return endJob(data)
 
 const handleTransfer5 = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const { text, receipt, from_account } = data
 
 	// 1. Parse text
@@ -25,7 +25,7 @@ const handleTransfer5 = async data => {
 }
 
 const handleTransfer10 = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const { input, receipt, from_account, to_account, transfer } = data
 
 	// 4. Get payer account
@@ -49,7 +49,7 @@ const handleTransfer10 = async data => {
 }
 
 const parseText = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const { text, msg } = data
 	
 	const bank = 
@@ -142,7 +142,7 @@ const parseText = async data => {
 
 // check if this receipt is already in db
 const checkReceipt = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const { receipt } = data
 	const found = await db.oneOrNone(
 		`SELECT * FROM public.transfer
@@ -168,8 +168,8 @@ const parseReceipt = receipt => {
 }
 
 const askForPayer = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
-	const {  msg: { text }, state, actions } = data
+	if (process.env.debug) debugLog(functionName(), data)
+	const { msg: { text }, state, actions } = data
 	
 	if (state !== 'ask-for-payer') {
 		data.msg = await bot.sendMessage( data.user.chat_id,
@@ -177,10 +177,14 @@ const askForPayer = async data => {
 			{
 				reply_markup: {
 					inline_keyboard: [
-						...(await getUsersContacts(data)).map(c => [{
-							text: `👤 ${c.name}`,
-							callback_data: `ask-for-payer:amo_id:${c.id}`
-						}]),
+						// ...(await getUsersContacts(data)).map(c => [{
+						// 	text: `👤 ${c.name}`,
+						// 	callback_data: `ask-for-payer:amo_id:${c.id}`
+						// }]),
+					[{
+						text: '👤 Выбрать из списка работников',
+						callback_data: `ask-for-payer:employee`
+					}],
 					[{
 						text: '🏦 Подтянуть из Точки',
 						callback_data: `select-tochka-payment`
@@ -198,6 +202,10 @@ const askForPayer = async data => {
 		)
 		data.state = 'ask-for-payer'
 		return setStore(data)
+	}
+
+	if (actions?.[0] === 'employee') {
+		return askForEmployee(data)
 	}
 
 	const _askForAccountOfAmoId = amo_id => {
@@ -224,8 +232,31 @@ const askForPayer = async data => {
 	else return _askForAccountOfAmoId(text)
 }
 
+const askForEmployee =  async data => {
+	if (process.env.debug) debugLog(functionName(), data)
+	const { msg: { text } } = data
+
+	data.msg = await bot.sendMessage( data.user.chat_id,
+		text, // use same text message as in prev step
+		{
+			reply_markup: {
+				inline_keyboard: [
+					...(await getUsersContacts(data)).map(c => [{
+						text: `👤 ${c.name}`,
+						callback_data: `ask-for-payer:amo_id:${c.id}`
+					}]),
+				[{
+					text: 'Закончить 🔚',
+					callback_data: `cancel`
+				}]]
+			}
+		}
+	)
+	return setStore(data)
+}
+
 const getUsersContacts =  async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const { usersContacts } = data
 	if (usersContacts) return usersContacts
 
@@ -236,7 +267,7 @@ const getUsersContacts =  async data => {
 }
 
 const askForTransferId = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const {  msg: { text }, state } = data
 
 	if (state !== 'ask-for-transfer-id') {
@@ -263,7 +294,7 @@ const askForTransferId = async data => {
 }
 
 const selectTochkaPayment = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const { state, actions } = data
 
 	if (state !== 'select-tochka-payment') {
@@ -309,8 +340,8 @@ const selectTochkaPayment = async data => {
 }
 
 const askForAccount = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
-	const { msg: { text }, actions, state, result_field, ask_for_account: cache = {} } = data
+	if (process.env.debug) debugLog(functionName(), data)
+	const { msg: { text }, actions, state, result_field, ask_for_account: cache } = data
 
 	if (state !== 'ask-for-account') {
 		const cache = data.ask_for_account = {}
@@ -367,12 +398,11 @@ const askForAccount = async data => {
 		: cache.accounts.find(a => a.id === parseInt(param))
 
 	;['actions', 'state', 'result_field', 'ask_for_account'].forEach(k => delete data[k])
-	outputJson(data)
 	return handleTransfer10(data)
 }
 
 const askForPayee = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const { msg: { text }, state } = data
 
 	if (state !== 'ask-for-payee') {
@@ -405,7 +435,7 @@ const askForPayee = async data => {
 }
 
 const getPayeeAccount = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const { input } = data
 	let result
 	
@@ -442,7 +472,7 @@ const getPayeeAccount = async data => {
 }
 
 const askForAmount = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const {  msg: { text }, state, input } = data
 
 	if (state !== 'ask-for-amount') {
@@ -469,8 +499,8 @@ const askForAmount = async data => {
 }
 
 const askForDate = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
-	const {  msg: { text }, state, input } = data
+	if (process.env.debug) debugLog(functionName(), data)
+	const { msg: { text }, state, input } = data
 
 	if (state !== 'ask-for-date') {
 		data.msg = await bot.sendMessage( data.user.chat_id,
@@ -496,7 +526,7 @@ const askForDate = async data => {
 }
 
 const createTransfer = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const { input, receipt, text, payment } = data
 	let result
 
@@ -538,8 +568,8 @@ const getAccount = async id => db.one( "SELECT * FROM public.account WHERE id = 
 const getTransfer = async id => db.one( "SELECT * FROM public.transfer WHERE id = $1", id )
 
 const checkoutTransfer = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
-	const {user, transfer, from_account, to_account} = data
+	if (process.env.debug) debugLog(functionName(), data)
+	const { user, transfer, from_account, to_account, receipt } = data
 	data.moves = await getMoves(data)
 	transfer.paid_total = data.moves.reduce((prev, cur, i) => prev + cur.paid, 0)
 	if (data.moves.length) {
@@ -552,8 +582,8 @@ const checkoutTransfer = async data => {
 	data.from_amo = data.to_amo = data.from_org = data.to_org = data.compensation = undefined
 	if (data.from_account.amo_id) data.from_amo = await getAmoContact(data.from_account.amo_id)
 	if (data.to_account.amo_id) data.to_amo = await getAmoContact(data.to_account.amo_id)
-	if (data.from_account.inn) data.from_org = await getOrg(data.from_account.inn)
-	if (data.to_account.inn) data.to_org = await getOrg(data.to_account.inn)
+	if (data.from_account.inn) data.from_org = await getOrg({ inn: data.from_account.inn })
+	if (data.to_account.inn) data.to_org = await getOrg({ inn: data.to_account.inn })
 
 	const text = despace`Перевод ${transfer.was_existent ? 'уже был ' : ''}зарегистрирован
 								#️⃣ ${transfer.id}
@@ -581,6 +611,10 @@ const checkoutTransfer = async data => {
 						callback_data: `transfer-accounting-0:${m.id}`
 					}]
 				}),
+				...data.to_account.inn === '7724490000' ? [[{
+					text: 'Учесть почтовое отправление 📬',
+					callback_data: `handle-post-receipt`
+				}]] : [],
 				[{
 					text: 'Учесть 📊',
 					callback_data: `transfer-accounting-0`
@@ -597,7 +631,7 @@ const checkoutTransfer = async data => {
 }
 
 const getMoves = async data => {
-	if (process.env.debug) console.log(functionName(), '>')
+	if (process.env.debug) debugLog(functionName(), data)
 	const { transfer } = data
 	return db.any(
 		"SELECT * FROM public.move WHERE transfer_id = $1",

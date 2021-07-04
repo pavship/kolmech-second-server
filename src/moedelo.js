@@ -8,10 +8,17 @@ const moedelo = axios.create({
   }
 })
 
-const getOrg = async inn => {
+const getOrg = async ({ inn, name }) => {
 	let result
-	result = (await moedelo.get(`/kontragents/api/v1/kontragent?pageSize=1000000&inn=${inn}`))?.data?.ResourceList?.[0]
-	|| (await moedelo.post(`/kontragents/api/v1/kontragent/inn`, { Inn: inn }))?.data
+	result = (await moedelo.get(`/kontragents/api/v1/kontragent`, {
+		params: {
+			pageSize: 1000000,
+			...inn ? { inn } : {name}
+		}
+	}))?.data?.ResourceList?.[0]
+	|| inn && (await moedelo.post(`/kontragents/api/v1/kontragent/inn`, { Inn: inn }))?.data
+	|| null
+	
 	//#region schema
 	// console.log('result > ', result)
 	// result >  {

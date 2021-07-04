@@ -11,6 +11,7 @@ import { checkoutMove, requireCompensaton, transferAccounting0, selectEntity, tr
 import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany } from './src/company.js'
 import { endJob, getStore, getUser } from './src/user.js'
 import { outputJson } from './src/utils.js'
+import { askForDeal, askForPostProject, askForPostTask, askForRPO, handlePostReceipt } from './flows/handle-post-receipt.js'
 
 dotenv.config()
 
@@ -49,6 +50,9 @@ bot.on('text', async (msg) => {
 			break
 		case 'require-compensation':
 			requireCompensaton(data)
+			break
+		case 'ask-for-rpo':
+			askForRPO(data)
 			break
 		default:
 			console.log('unhandled state with data> ', data)
@@ -132,7 +136,6 @@ bot.on('document', async (msg) => {
 	}
 	if (msg.document.file_name.endsWith('.json')) {
 		data.receipt = (await axios.get(href)).data[0]
-		outputJson(data)
 	}
 	handleTransfer5(data)
 	return
@@ -217,6 +220,18 @@ bot.on('callback_query', async (callbackData) => {
 			break
 		case 'create-post-inlet-10':
 			createPostInlet10(data)
+			break
+		case 'handle-post-receipt':
+			handlePostReceipt(data)
+			break
+		case 'ask-for-deal':
+			askForDeal(data)
+			break
+		case 'ask-for-post-project':
+			askForPostProject(data)
+			break
+		case 'ask-for-post-task':
+			askForPostTask(data)
 			break
 		case 'cancel':
 			endJob(data)

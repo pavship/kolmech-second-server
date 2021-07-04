@@ -8,7 +8,7 @@ import { getOrg } from '../src/moedelo.js'
 // outputJson(data) ; return endJob(data)
 
 const transferAccounting0 = async data => {
-	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
+	if (process.env.debug) debugLog(functionName(), data)
 	const { actions } = data
 	const edit_move_id = parseInt(actions.shift())
 	if (edit_move_id) return checkoutMove({ ...data, move: await db.one("SELECT * FROM public.move WHERE id = $1", edit_move_id) })
@@ -28,7 +28,7 @@ const transferAccounting0 = async data => {
 }
 
 const askForSeller = async data => {
-	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
+	if (process.env.debug) debugLog(functionName(), data)
 	const { msg: { text }, actions, state, move, to_org } = data
 
 	if (state !== 'ask-for-seller') {
@@ -77,7 +77,7 @@ const askForSeller = async data => {
 }
 
 const transferAccounting5 = async data => {
-	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
+	if (process.env.debug) debugLog(functionName(), data)
 	const { move } = data
 	outputJson(data)
 
@@ -128,7 +128,7 @@ const findRequiredCompensations = async data => {
 }
 
 const selectEntity = async data => {
-	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
+	if (process.env.debug) debugLog(functionName(), data)
 	const { msg: { text }, actions, move, user } = data
 
 	const text_input_id = parseInt(text)
@@ -171,7 +171,7 @@ const selectEntity = async data => {
 }
 
 const askForAmount = async data => {
-	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
+	if (process.env.debug) debugLog(functionName(), data)
 	const { transfer, task, proj } = data
 	data.required_compensation = data.required_compensations.find(m => m.task_id == task?.id && !m.proj_id || m.proj_id == proj?.id  && !m.task_id)
 
@@ -207,7 +207,7 @@ const askForAmount = async data => {
 }
 
 const transferAccounting15 = async data => {
-	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
+	if (process.env.debug) debugLog(functionName(), data)
 	const { msg: { text }, actions, move, task, proj } = data
 	move.amount = move.paid = parseFloat(text) || parseFloat(actions.shift())
 	if (task) move.task_id = task.id
@@ -225,7 +225,7 @@ const transferAccounting15 = async data => {
 }
 
 const allocateCompensation = async data => {
-	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
+	if (process.env.debug) debugLog(functionName(), data)
 	let result
 
 	result = await db.one(
@@ -237,7 +237,7 @@ const allocateCompensation = async data => {
 }
 
 const createMove = async data => {
-	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
+	if (process.env.debug) debugLog(functionName(), data)
 	const { move, task } = data
 	let result
 
@@ -253,13 +253,13 @@ const createMove = async data => {
 }
 
 const checkoutMove = async data => {
-	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
+	if (process.env.debug) debugLog(functionName(), data)
 	const {user, move} = data
 	data.from_amo = data.to_amo = data.from_org = data.to_org = data.compensation = undefined
 	if (move.from_amo_id) data.from_amo = await getAmoContact(move.from_amo_id)
 	if (move.to_amo_id) data.to_amo = await getAmoContact(move.to_amo_id)
-	if (move.from_inn) data.from_org = await getOrg(move.from_inn)
-	if (move.to_inn) data.to_org = await getOrg(move.to_inn)
+	if (move.from_inn) data.from_org = await getOrg({ inn: move.from_inn })
+	if (move.to_inn) data.to_org = await getOrg({ inn: move.to_inn })
 	data.compensation = await db.oneOrNone("SELECT * FROM public.move WHERE compensation_for = $1", move.id)
 
 	const text = despace`Начисление ${move.was_created ? 'зарегистрировано' : move.was_updated ? 'компенсировано' : 'уже было зарегистрировано'}
@@ -297,8 +297,22 @@ const checkoutMove = async data => {
 	return setStore(data)
 }
 
+const constructMoveMessageText = data => {
+	const {user, move} = data
+	return despace`
+		Начисление ${move.was_created ? 'зарегистрировано' : move.was_updated ? 'компенсировано' : 'уже было зарегистрировано'}
+		#️⃣ ${move.id}
+		💵 ${move.amount} ₽ начислено
+		💵 ${move.paid} ₽ оплачено
+		${!!data.from_amo ? `Поставщик: 👤 <a href='${amoBaseUrl}/contacts/detail/${data.from_amo.id}'>${data.from_amo.name}</a>` : ''}
+		${!!data.from_org ? `Поставщик: 🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.from_org.Inn}'>${data.from_org.ShortName}</a>` : ''}
+		${!!data.to_amo ? `Покупатель: 👤 <a href='${amoBaseUrl}/contacts/detail/${data.to_amo.id}'>${data.to_amo.name}</a>` : ''}
+		${!!data.to_org ? `Покупатель: 🏢 <a href='https://www.list-org.com/search?type=inn&val=${data.to_org.Inn}'>${data.to_org.ShortName}</a>` : ''}
+		${!!move.compensation_for ? `Начисление является компенсацией за move_id = ${move.compensation_for}` : ''}`
+}
+
 const requireCompensaton = async data => {
-	if (process.env.debug) {const func = functionName(); console.log(func, '>'); debugLog({ func, ...data })}
+	if (process.env.debug) debugLog(functionName(), data)
 	const { msg: { text }, actions, state, move } = data
 	let result
 
@@ -353,5 +367,6 @@ export {
 	selectEntity,
 	transferAccounting15,
 	checkoutMove,
+	constructMoveMessageText,
 	requireCompensaton,
 }
