@@ -523,6 +523,35 @@ const createTask = async ({ name, parent, }) => {
 
 const getProj = async id => (await megaplan_v3( 'GET', `/api/v3/project/${id}` )).data
 
+const createProjectComment = async ({ proj, content }) => (await megaplan_v3( 'POST',
+	`/api/v3/project/${proj.id}/comments`, {
+		contentType: 'CommentCreateActionRequest',
+		comment: {
+			contentType: 'Comment',
+			content,
+			attaches: [],
+			workTime: null,
+			// workDate: {
+			// 	contentType: 'DateTime',
+			// 	value: '2021-07-11T09:26:55.700Z'
+			// },
+			completed: 0,
+			owner: {
+				id: '1000005',
+				contentType: 'Employee'
+			},
+			subject: {
+				id: proj.id,
+				contentType: 'Project'
+			},
+			// timeCreated: {
+			// 	contentType: 'DateTime',
+			// 	value: '2021-07-11T10:40:38.086Z'
+			// }
+		},
+		transports: [ {} ]
+	})).data
+
 export { 
 	megaplan,
 	megaplan_v3,
@@ -531,4 +560,5 @@ export {
 	getTasksToPay,
 	createTask,
 	getProj,
+	createProjectComment,
 }

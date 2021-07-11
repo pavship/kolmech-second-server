@@ -1,9 +1,9 @@
 import { db } from '../src/postgres.js'
 import bot from '../bot.js'
-import { endJob, setStore } from './../src/user.js'
-import { getTask, getProj, megaplan_v3, setTaskBudget, getTasksToPay } from '../src/megaplan.js'
+import { clearCache, endJob, setStore } from './../src/user.js'
+import { getTask, getProj, megaplan_v3, setTaskBudget, getTasksToPay, createProjectComment } from '../src/megaplan.js'
 import { outputJson, functionName, despace, debugLog } from './../src/utils.js'
-import { amoBaseUrl, findAmoContacts, getAmoContact } from './../src/amo.js'
+import { amoBaseUrl, findAmoCompany, findAmoContacts, getAmoContact } from './../src/amo.js'
 import { getOrg } from '../src/moedelo.js'
 // outputJson(data) ; return endJob(data)
 
@@ -22,6 +22,7 @@ const transferAccounting0 = async data => {
 		to_inn: data.from_account.inn,
 		task_id: null,
 		proj_id: null,
+		qty: null,
 	}
 
 	askForSeller(data)
@@ -128,20 +129,18 @@ const findRequiredCompensations = async data => {
 
 const selectEntity = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
-	const { msg: { text }, actions, move, user } = data
+	const { msg: { text }, actions, user } = data
 
 	const text_input_id = parseInt(text)
 	if (text_input_id) {
 		const task = await getTask(text_input_id)
 		const proj = await getProj(text_input_id)
-		console.log('task, proj > ', task, proj)
 		if (task && !proj) return delete data.proj && askForAmount({ ...data, task })
-		if (proj && !task) return delete data.task && askForAmount({ ...data, proj })
+		if (proj && !task) return delete data.task && askForQty({ ...data, proj })
 		data.msg = await bot.sendMessage( user.chat_id,
 			`Уазанному id соответствуют задача и проект. Уточните выбор`,
 			{
-				reply_markup: {
-					inline_keyboard: [
+				reply_markup: { inline_keyboard: [
 					...task ? [[{
 						text: `Task: ${task.humanNumber}. ${task.name}`,
 						callback_data: `select-entity:task:${task.id}`
@@ -150,11 +149,7 @@ const selectEntity = async data => {
 						text: `Project: ${proj.humanNumber}. ${proj.name}`,
 						callback_data: `select-entity:proj:${proj.id}`
 					}]] : [],
-					[{
-						text: 'Закончить 🔚',
-						callback_data: `cancel`
-					}]]
-				}
+				]}
 			}
 		)
 		data.state = 'select-entity'
@@ -165,8 +160,40 @@ const selectEntity = async data => {
 	const id = parseInt(actions.shift())
 	if (entity_type === 'task') data.task = data.tasks?.find(t => t.id == id)	|| await getTask(id)
 	if (entity_type === 'proj') data.proj = await getProj(id)
+	const msg_text = data.task
+		? `Выбрана задача <a href='https://${process.env.MEGAPLAN_HOST}/task/${data.task.id}/card/'>${data.task.humanNumber}. ${data.task.name}</a>`
+		: `Выбран проект (ТМЦ) <a href='https://${process.env.MEGAPLAN_HOST}/project/${data.proj.id}/card/'>${data.proj.humanNumber}. ${data.proj.name}</a>`
+		data.msg = await bot.sendMessage( user.chat_id, msg_text, { parse_mode: 'HTML', disable_web_page_preview: true } )
 
+	if (data.proj) return askForQty(data)
 	askForAmount(data)
+}
+
+const askForQty = async data => {
+	if (process.env.debug) debugLog(functionName(), data)
+	const { msg: { text }, state, actions, move } = data
+
+	if (state !== 'askForQty') {
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Укажите количество товара`,
+			{
+				reply_markup: { inline_keyboard: [
+					[{
+						text: `Не указывать`,
+						callback_data: `askForQty:skip`
+					}],
+				]}
+			}
+		)
+		data.state = 'askForQty'
+		return setStore(data)
+	}
+
+	if (actions?.[0] === 'skip') return askForAmount(clearCache(data))
+
+	move.qty = parseInt(text)
+
+	askForAmount(clearCache(data))
 }
 
 const askForAmount = async data => {
@@ -180,8 +207,7 @@ const askForAmount = async data => {
 	data.msg = await bot.sendMessage( data.user.chat_id,
 		`Укажите или выберите сумму, которую нужно списать на выбранную задачу/услугу`,
 		{
-			reply_markup: {
-				inline_keyboard: [
+			reply_markup: { inline_keyboard: [
 				...task ? [[{
 					text: `Сумму плановых затрат: ${task.Category130CustomFieldPlanovieZatrati} ₽`,
 					callback_data: `transfer-accounting-15:${task.Category130CustomFieldPlanovieZatrati}`
@@ -194,11 +220,7 @@ const askForAmount = async data => {
 					text: `Всю сумму платежа: ${transfer.amount} ₽`,
 					callback_data: `transfer-accounting-15:${transfer.amount}`
 				}],
-				[{
-					text: 'Закончить 🔚',
-					callback_data: `cancel`
-				}]]
-			}
+			]}
 		}
 	)
 	data.state = 'transfer-accounting-10'
@@ -219,6 +241,8 @@ const transferAccounting15 = async data => {
 		? await allocateCompensation(data)
 		: await createMove(data)
 
+	if (data.proj) return commentOnPurchase(data)
+
 	// 11. Notify user
 	checkoutMove(data)
 }
@@ -237,18 +261,57 @@ const allocateCompensation = async data => {
 
 const createMove = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
-	const { move, task } = data
+	const { transfer, move, task } = data
 	let result
 
 	result = await db.one(
-		`INSERT INTO public.move(transfer_id, from_amo_id, from_inn, to_amo_id, to_inn, amount, paid, task_id, proj_id)
-		VALUES ($<transfer_id>, $<from_amo_id>, $<from_inn>, $<to_amo_id>, $<to_inn>, $<amount>, $<paid>, $<task_id>, $<proj_id>) RETURNING *`,
+		`INSERT INTO public.move(transfer_id, from_amo_id, from_inn, to_amo_id, to_inn, amount, paid, task_id, proj_id, qty)
+		VALUES ($<transfer_id>, $<from_amo_id>, $<from_inn>, $<to_amo_id>, $<to_inn>, $<amount>, $<paid>, $<task_id>, $<proj_id>, $<qty>) RETURNING *`,
 		move
 	)
 
 	if (task) await setTaskBudget(task.id, task.Category130CustomFieldPlanovieZatrati - move.paid)
 
 	return { ...result, was_created: true }
+}
+
+const commentOnPurchase = async data => {
+	if (process.env.debug) debugLog(functionName(), data)
+	const { state, user, transfer, move, proj, to_org } = data
+
+	if (!!data.to_org && !data._company) {
+		data._company = await findAmoCompany(to_org.Inn)
+		if (!data._company) {
+			data.msg = await bot.sendMessage( user.chat_id,
+				`Заполните ИНН ${to_org.Inn} поставщика ${to_org.ShortName} в AmoCRM`,
+				{
+					reply_markup: { inline_keyboard: [
+						[{
+							text: `Готово`,
+							callback_data: `commentOnPurchase:skip`
+						}],
+					]},
+					parse_mode: 'HTML'
+				}
+			)
+			data.state = 'commentOnPurchase'
+			return setStore(data)
+		}
+	}
+
+	await createProjectComment({
+		proj,
+		content: despace`
+			<p>🗓 ${new Date((transfer.datetime + 3*3600)*1000).toISOString().replace(/T|\.000Z/g, ' ')}
+			${move.qty ? `🔢 ${move.qty} шт.` : ''}
+			💵 ${move.paid} ₽
+			${!!data.to_amo ? `🛒👤 <a href='${amoBaseUrl}/contacts/detail/${data.to_amo.id}'>${data.to_amo.name}</a>` : ''}
+			${!!data.to_org ? `🛒🏢 <a href='${amoBaseUrl}/companies/detail/${data._company.id}'>${data.to_org.ShortName}</a>` : ''}
+			</p>
+		`
+	})
+
+	checkoutMove(clearCache(data))
 }
 
 const checkoutMove = async data => {
@@ -273,8 +336,7 @@ const checkoutMove = async data => {
 	// 3. Ask for compensation
 	data.msg = await bot.sendMessage( user.chat_id, text,
 		{
-			reply_markup: {
-				inline_keyboard: [
+			reply_markup: { inline_keyboard: [
 				...data.compensation
 					? [[{
 						text: 'Назначенная компенсация ⤵️',
@@ -284,10 +346,6 @@ const checkoutMove = async data => {
 						text: 'Запросить компенсацию ⤵️',
 						callback_data: `require-compensation`
 					}]],
-				[{
-					text: 'Закончить 🔚',
-					callback_data: `cancel`
-				}]
 			]},
 			parse_mode: 'HTML'
 		}
@@ -329,10 +387,6 @@ const requireCompensaton = async data => {
 							text: 'ШПС (ФЛ)',
 							callback_data: `require-compensation:amo_id:22575633`
 						}],
-						[{
-							text: 'Закончить 🔚',
-							callback_data: `cancel`
-						}],
 					]
 				}
 			}
@@ -364,7 +418,9 @@ export {
 	transferAccounting0,
 	askForSeller,
 	selectEntity,
+	askForQty,
 	transferAccounting15,
+	commentOnPurchase,
 	checkoutMove,
 	constructMoveMessageText,
 	requireCompensaton,

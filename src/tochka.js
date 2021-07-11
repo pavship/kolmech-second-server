@@ -30,15 +30,15 @@ const tochka = axios.create({
 	}
 })
 
-const getTochkaRequestId = async date => tochka.post('', {
+const getTochkaRequestId = async ({ date_start, date_end }) => tochka.post('', {
 	account_code: process.env.TOCHKA_ACCOUNT_CODE_IP,
 	bank_code: '044525999',
-	date_start: '2021-05-30',
-	date_end: '2021-06-06'
+	date_start,
+	date_end,
 })
 
-const getTochkaPayments = async date => {
-	const { data: { request_id } } = await getTochkaRequestId(date)
+const getTochkaPayments = async ({ date_start, date_end }) => {
+	const { data: { request_id } } = await getTochkaRequestId({ date_start, date_end })
 	//#region schema
 	// console.log('request_id > ', request_id)
 	// request_id >  044525999.2021-06-06.2021-06-01.40802810301500021080

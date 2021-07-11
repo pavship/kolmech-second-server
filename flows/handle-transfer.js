@@ -1,6 +1,6 @@
 import { db } from '../src/postgres.js'
 import bot from '../bot.js'
-import { endJob, setStore } from '../src/user.js'
+import { clearCache, endJob, setStore } from '../src/user.js'
 import { outputJson, functionName, despace, debugLog } from '../src/utils.js'
 import { amoBaseUrl, findAmoContacts, getAmoContact } from '../src/amo.js'
 import { getOrg } from '../src/moedelo.js'
@@ -186,7 +186,7 @@ const askForPayer = async data => {
 					}],
 					[{
 						text: '🏦 Подтянуть из Точки',
-						callback_data: `select-tochka-payment`
+						callback_data: `selectTochkaPayment`
 					}],
 					[{
 						text: '🏢 ИП ШПС',
@@ -267,7 +267,7 @@ const getUsersContacts =  async data => {
 
 const askForTransferId = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
-	const {  msg: { text }, state } = data
+	const { msg: { text }, state } = data
 
 	if (state !== 'ask-for-transfer-id') {
 		data.msg = await bot.sendMessage( data.user.chat_id,
@@ -294,33 +294,38 @@ const askForTransferId = async data => {
 
 const selectTochkaPayment = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
-	const { state, actions } = data
+	const { msg: { text }, state, actions } = data
 
-	if (state !== 'select-tochka-payment') {
-		data.payments = await getTochkaPayments()
+	if (state !== 'selectTochkaPayment') {
+		data.msg = await bot.sendMessage( data.user.chat_id, `Укажите дату платежа` )
+		data.state = 'selectTochkaPayment'
+		return setStore(data)
+	}
+
+	if (!data._payments) {
+		data._payments = await getTochkaPayments({
+			date_start: text,
+			date_end: text,
+		})
 		data.msg = await bot.sendMessage( data.user.chat_id,
 			`Выберите платеж`,
 			{
 				reply_markup: {
 					inline_keyboard: [
-						...data.payments.map(p => [{
+						...data._payments.map(p => [{
 							text: `${p.payment_purpose}`,
-							callback_data: `select-tochka-payment:${p.x_payment_id}`
-						}]),
-					[{
-						text: 'Закончить 🔚',
-						callback_data: `cancel`
-					}]]
+							callback_data: `selectTochkaPayment:${p.x_payment_id}`
+						}])
+					]
 				}
 			}
 		)
-		data.state = 'select-tochka-payment'
 		return setStore(data)
 	}
 
-	data.payment = data.payments.find(p => p.x_payment_id === actions[0])
+	data.payment = data._payments.find(p => p.x_payment_id === actions[0])
 	data.from_account = await db.one(
-		`SELECT * FROM account a WHERE type = 'bank AND bank_name = 'Точка' AND number = $1`,
+		`SELECT * FROM account a WHERE type = 'bank' AND bank_name = 'Точка' AND number = $1`,
 		process.env.TOCHKA_ACCOUNT_CODE_IP
 	)
 	data.input = {
@@ -334,8 +339,8 @@ const selectTochkaPayment = async data => {
 		amount: Math.abs(data.payment.payment_amount),
 		datetime: Date.parse(data.payment.payment_date.split('.').reverse().join('-') + 'T00:00:00Z')/1000 - 3*3600 //Moscow date to Epoch
 	}
-	;['actions', 'state', 'result_field', 'ask_for_account'].forEach(k => delete data[k])
-	return handleTransfer10(data)
+
+	return handleTransfer10(clearCache(data))
 }
 
 const askForAccount = async data => {

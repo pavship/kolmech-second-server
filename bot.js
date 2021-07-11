@@ -7,7 +7,7 @@ import pdfParse from 'pdf-parse'
 import fs from 'fs'
 import axios from 'axios'
 import { handleTransfer5, askForAccount, selectTochkaPayment, askForPayee, askForAmount, askForDate, askForTransferId, askForPayer } from './flows/handle-transfer.js'
-import { checkoutMove, requireCompensaton, transferAccounting0, selectEntity, transferAccounting15, askForSeller } from './flows/transfer-accounting.js'
+import { checkoutMove, requireCompensaton, transferAccounting0, selectEntity, transferAccounting15, askForSeller, askForQty, commentOnPurchase } from './flows/transfer-accounting.js'
 import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany } from './src/company.js'
 import { endJob, getStore, getUser } from './src/user.js'
 import { outputJson } from './src/utils.js'
@@ -31,8 +31,14 @@ bot.on('text', async (msg) => {
 		case 'ask-for-transfer-id':
 			askForTransferId(data)
 			break
+		case 'selectTochkaPayment':
+			selectTochkaPayment(data)
+			break
 		case 'ask-for-payee':
 			askForPayee(data)
+			break
+		case 'askForQty':
+			askForQty(data)
 			break
 		case 'ask-for-amount':
 			askForAmount(data)
@@ -89,7 +95,7 @@ bot.onText(/^t$/, async msg => {
 // DEBUG
 bot.onText(/^s$/, async msg => {
 	const data = JSON.parse(fs.readFileSync('outputdebug.json', 'utf-8'))
-	askForEmailToReply(data)
+	askForQty(data)
 })
 
 bot.onText(/\.amocrm\.ru\/companies\/detail/, async (msg) => {
@@ -196,7 +202,7 @@ bot.on('callback_query', async (callbackData) => {
 	data.actions = actions.split(':')
 	console.log('data.actions > ', data.actions)
 	switch (data.actions.shift()) {
-		case 'select-tochka-payment':
+		case 'selectTochkaPayment':
 			selectTochkaPayment(data)
 			break
 		case 'ask-for-transfer-id':
@@ -217,8 +223,12 @@ bot.on('callback_query', async (callbackData) => {
 		case 'select-entity':
 			selectEntity(data)
 			break
+		case 'askForQty': askForQty(data); break
 		case 'transfer-accounting-15':
 			transferAccounting15(data)
+			break
+		case 'commentOnPurchase':
+			commentOnPurchase(data)
 			break
 		case 'checkout-move':
 			checkoutMove(data)
