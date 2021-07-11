@@ -79,7 +79,6 @@ const askForSeller = async data => {
 const transferAccounting5 = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
 	const { move } = data
-	outputJson(data)
 
 	if (move.from_amo_id) {
 		// 5. Find probable tasks

@@ -11,7 +11,7 @@ import { checkoutMove, requireCompensaton, transferAccounting0, selectEntity, tr
 import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany } from './src/company.js'
 import { endJob, getStore, getUser } from './src/user.js'
 import { outputJson } from './src/utils.js'
-import { askForDeal, askForPostProject, askForPostTask, askForRPO, handlePostReceipt } from './flows/handle-post-receipt.js'
+import { askForDeal, askForEmailToReply, askForPostProject, askForPostTask, askForRPO, handlePostReceipt, sendPostReply } from './flows/handle-post-receipt.js'
 
 dotenv.config()
 
@@ -19,6 +19,7 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {polling: true})
 
 bot.on('text', async (msg) => {
 	// console.log('text msg > ', msg)
+	if (msg.text === '/cancel') return
 
 	const data = await getStore(msg.chat.id)
 	if (!data) return
@@ -67,6 +68,13 @@ bot.onText(/\/transfer/, async msg => {
 	handleTransfer5(data)
 })
 
+bot.onText(/\/cancel/, async msg => {
+  const data = {
+		user: await getUser(msg.chat.id),
+	}
+	endJob(data)
+})
+
 bot.onText(/^t$/, async msg => {
 	// console.log('text t msg > ', msg)
 	const data = {
@@ -76,6 +84,12 @@ bot.onText(/^t$/, async msg => {
 	}
 	handleTransfer5(data)
 	// await axios.post('https://hook.integromat.com/tfj6964s5ba98tfdpdwilmoymm7nbxo5', result)
+})
+
+// DEBUG
+bot.onText(/^s$/, async msg => {
+	const data = JSON.parse(fs.readFileSync('outputdebug.json', 'utf-8'))
+	askForEmailToReply(data)
 })
 
 bot.onText(/\.amocrm\.ru\/companies\/detail/, async (msg) => {
@@ -232,6 +246,9 @@ bot.on('callback_query', async (callbackData) => {
 			break
 		case 'ask-for-post-task':
 			askForPostTask(data)
+			break
+		case 'send-post-reply':
+			sendPostReply(data)
 			break
 		case 'cancel':
 			endJob(data)

@@ -126,6 +126,12 @@ const findAmoDeals = async params => {
 	return result
 }
 
+const getDealNotes = async id => {
+	const { data: { _embedded: { items: notes } } } = await (await amoConnect())
+		.get('/api/v2/notes?type=lead&element_id=' + id)
+	return notes
+}
+
 const getAmoStatuses = async () => {
 	const result = (await (await amoConnect())
 			.get('/api/v2/pipelines?id=1593157')
@@ -145,5 +151,6 @@ export {
 	getAmoContacts,
 	findAmoCompany,
 	findAmoDeals,
+	getDealNotes,
 	getAmoStatuses
 }

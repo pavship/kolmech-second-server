@@ -98,7 +98,6 @@ const parseText = async data => {
 	result.to_account_phone = result.to_account_phone?.replace(/[ |(|)|-]/g, '')
 	result.amount = result.amount?.replaceAll(/ | |₽/g, '').replace(',', '.')
 	result.bank_fee = result.bank_fee?.replaceAll(/ | |₽/g, '').replace(',', '.')
-	outputJson(result)
 	//#region schema
 	// console.log(functionName(), ' result > ', result)
 	// result >  {

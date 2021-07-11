@@ -502,7 +502,7 @@ const setTaskBudget = async (id, value) => {
 	)).data
 }
 
-const createTask = async task => {
+const createTask = async ({ name, parent, }) => {
 	const result = (await megaplan_v3( 'POST', `/api/v3/task`, {
 		Category130CustomFieldPlanovieZatrati: null,
 		Category130CustomFieldPrioritet: 'П2 Средний',
@@ -512,9 +512,9 @@ const createTask = async task => {
 		deadline: null,
 		isTemplate: false,
 		isUrgent: false,
-		name: 'Корреспонденция',
+		name,
 		owner: {id: '1000005', contentType: 'Employee'},
-		parent: {id: '1001235', contentType: 'Project'},
+		parent,
 		responsible: {id: '1000005', contentType: 'Employee'},
 	})).data
 	console.log('task created > ', result.id)

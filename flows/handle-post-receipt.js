@@ -1,13 +1,15 @@
+import axios from 'axios'
+import FormData from 'form-data'
+import ImapSimple from 'imap-simple'
 import { db } from '../src/postgres.js'
 import bot from '../bot.js'
 import { clearCache, endJob, setStore } from '../src/user.js'
-import { outputJson, functionName, despace, debugLog } from '../src/utils.js'
-import axios from 'axios'
-import FormData from 'form-data'
+import { outputJson, functionName, debugLog, despace } from '../src/utils.js'
 import { getOrg } from '../src/moedelo.js'
-import { findAmoCompany, findAmoDeals, getAmoStatuses } from '../src/amo.js'
+import { amoBaseUrl, findAmoCompany, findAmoDeals, getAmoContact, getAmoStatuses, getDealNotes } from '../src/amo.js'
 import { createTask, getProj } from '../src/megaplan.js'
 import { constructMoveMessageText } from './transfer-accounting.js'
+import { ceoImapConfig, serverSmtpTransporter } from '../src/mail.js'
 
 const handlePostReceipt = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
@@ -24,11 +26,16 @@ const handlePostReceipt = async data => {
 	if (!post.project) return askForPostProject(data)
 
 	if (!post.task) return askForPostTask(data)
-
+	
 	if (!move) return createMove(data)
+	
+	if (!post.contact) return askForContact(data)
+	
+	if (!post.email_to_reply) return askForEmailToReply(data)
 
-	// if (!post.move) return createMove(data)
+	if (!post.sent_reply) return sendPostReply(data)
 
+	endJob(data)
 
 	//#region soap
 	// const { response } = await soapRequest({
@@ -80,16 +87,7 @@ const askForRPO = async data => {
 	if (state !== 'ask-for-rpo') {
 		data._rpo_start = receipt.ticket.document.receipt.retailPlace.slice(-6)
 		data.msg = await bot.sendMessage( data.user.chat_id,
-			`Добейте трек номер после ${data._rpo_start}...`,
-			{
-				reply_markup: {
-					inline_keyboard: [
-					[{
-						text: 'Закончить 🔚',
-						callback_data: `cancel`
-					}]]
-				}
-			}
+			`Добейте трек номер после ${data._rpo_start}...`
 		)
 		data.state = 'ask-for-rpo'
 		return setStore(data)
@@ -168,10 +166,7 @@ const askForDeal = async data => {
 							text: `🤝 ${name} (${data._statuses[status_id].name})`,
 							callback_data: `ask-for-deal:${id}`
 						}]),
-					[{
-						text: 'Закончить 🔚',
-						callback_data: `cancel`
-					}]]
+					]
 				}
 			}
 		)
@@ -222,7 +217,10 @@ const askForPostTask = async data => {
 			})
 		}
 		else {
-			post.task = await createTask()
+			post.task = await createTask({
+				name: 'Корреспонденция',
+				parent: {id: post.project.id, contentType: 'Project'}
+			})
 			data.msg = await bot.sendMessage( data.user.chat_id,
 				`Создана задача <a href='https://${process.env.MEGAPLAN_HOST}/task/${post.task.id}/card/'>${post.task.name}</a>`, {
 				parse_mode: 'HTML',
@@ -272,12 +270,121 @@ const createMove = async data => {
 	handlePostReceipt(clearCache(data))
 }
 
+const askForContact = async data => {
+	if (process.env.debug) debugLog(functionName(), data)
+	const { msg: { text }, state, actions, post } = data
 
+	if (state !== 'ask-for-contact') {
+		data._contact = await getAmoContact(post.deal.main_contact.id)
+		post.contact = data._contact
+		post.email_address_to_answer = post.contact.custom_fields.find(cf => cf.code === 'EMAIL').values[0].value
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Выбран основной контакт сделки <a href='${amoBaseUrl}/contacts/detail/${post.contact.id}'>${post.contact.name}</a>`, {
+			parse_mode: 'HTML',
+			disable_web_page_preview: true
+		})
+	}
+
+	handlePostReceipt(clearCache(data))
+}
+
+const askForEmailToReply = async data => {
+	if (process.env.debug) debugLog(functionName(), data)
+	const { msg: { text }, state, actions, post } = data
+	const lastEmails = []
+	const messages = {}
+
+	const connection = await ImapSimple.connect({ imap: ceoImapConfig })
+	for (let box of ['INBOX', 'Archive', 'Отправленные']) {
+		await connection.openBox(box)
+		const emails = await connection.search(
+			[
+				box === 'INBOX' ? ['FROM', post.email_address_to_answer] :
+				box === 'Archive' ? ['OR', ['FROM', post.email_address_to_answer], ['TO', post.email_address_to_answer]] :
+				box === 'Отправленные' ? ['TO', post.email_address_to_answer] : [],
+				['HEADER', 'SUBJECT', post.project.name.slice(-8)] //Re: Изготовление отбойника. # 
+			],
+			{ bodies: ['HEADER'] }
+		)
+		messages[box] = emails
+		emails.length && lastEmails.push(emails.pop())
+	}
+	connection.end()
+	
+	post.email_to_reply = lastEmails.sort((a, b) => a.attributes.date < b.attributes.date ? 1 : -1)[0]
+
+	if (!post.email_to_reply) {
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			`Не найдено ни одного email'a в переписке с ${post.email_address_to_answer},
+			содержащего в id сделки (${post.project.name.slice(-8)}) в теме`,
+		)
+		return endJob(data)
+	}
+
+	outputJson({messages, lastEmails})
+
+	handlePostReceipt(clearCache(data))
+}
+
+const sendPostReply = async data => {
+	if (process.env.debug) debugLog(functionName(), data)
+	const { msg: { text }, state, actions, post } = data
+
+	if (state !== 'send-post-reply') {
+		data.msg = await bot.sendMessage( data.user.chat_id,
+			despace`Последнее письмо в переписке по сделке:
+				От: ${post.email_to_reply.parts[0].body.from[0]}
+				Кому: ${post.email_to_reply.parts[0].body.to[0]}
+				Тема: ${post.email_to_reply.parts[0].body.subject[0]}
+				Дата: ${post.email_to_reply.attributes.date}
+			`,
+			{
+				reply_markup: {
+					inline_keyboard: [
+						[{
+							text: 'Отправить оповещение',
+							callback_data: `send-post-reply`
+						}]
+					]
+				}
+			}
+		)
+		data.state = 'send-post-reply'
+		return setStore(data)
+	}
+
+	// DEBUG
+	post.email_address_to_answer = '_@_.com'
+
+	const info = await serverSmtpTransporter.sendMail({
+		from: `"Сервер ХОНИНГОВАНИЕ.РУ" <${process.env.EMAIL_USERS.split(" ")[2]}>`,
+		to: post.email_address_to_answer,
+		cc: process.env.EMAIL_USERS.split(' ')[1],
+		subject: post.email_to_reply.parts[0].body.subject[0],
+		inReplyTo: post.email_to_reply.parts[0].body['message-id'][0],
+		html: `
+			<p style="color:rgb( 46 , 54 , 64 );">Добрый день!</p>
+			<p>Корреспонденция отправлена почтой https://www.pochta.ru/tracking#${post.rpo}</p>
+			<p style="color:rgb( 46 , 54 , 64 );font-size:13px;">--------------------------------------</p>
+			<p style="color:rgb( 46 , 54 , 64 );font-size:13px;">Это письмо отправлено автоматически, отвечать на него не нужно.</p>
+		`,
+	})
+
+	post.sent_reply = info || true
+	const msg_text = post.sent_reply?.accepted.includes(post.email_address_to_answer)
+		? `Письмо отправлено`
+		: `Что-то пошло не так. Письмо не отправлено`
+	data.msg = await bot.sendMessage( data.user.chat_id, msg_text	)
+
+	handlePostReceipt(clearCache(data))
+}
 
 export {
 	handlePostReceipt,
 	askForRPO,
 	askForDeal,
 	askForPostProject,
-	askForPostTask
+	askForPostTask,
+	askForEmailToReply,
+	sendPostReply
 }
