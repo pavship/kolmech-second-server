@@ -521,7 +521,41 @@ const createTask = async ({ name, parent, }) => {
 	return result
 }
 
+const doTaskAction = async (task_id, { action, checkTodos }) => (await megaplan_v3( 'POST', `/api/v3/task/${task_id}/doAction`, { action, checkTodos } )).data
+
+const createTaskComment = async ({ task, content }) => (await megaplan_v3( 'POST',
+	`/api/v3/task/${task.id}/comments`, {
+		contentType: 'CommentCreateActionRequest',
+		comment: {
+			contentType: 'Comment',
+			content,
+			attaches: [],
+			workTime: null,
+			// workDate: {
+			// 	contentType: 'DateTime',
+			// 	value: '2021-07-11T09:26:55.700Z'
+			// },
+			completed: 0,
+			owner: {
+				id: '1000005',
+				contentType: 'Employee'
+			},
+			subject: {
+				id: task.id,
+				contentType: 'Task'
+			},
+			// timeCreated: {
+			// 	contentType: 'DateTime',
+			// 	value: '2021-07-11T10:40:38.086Z'
+			// }
+		},
+		transports: [ {} ]
+	}
+)).data
+
 const getProj = async id => (await megaplan_v3( 'GET', `/api/v3/project/${id}` )).data
+
+const getProjTasks = async proj_id => (await megaplan_v3( 'GET', `/api/v3/task?{"fields":["name","activity","deadline","responsible","owner","unreadCommentsCount","isFavorite","Category130CustomFieldPlanovieZatrati","status","project"],"sortBy":[{"contentType":"SortField","fieldName":"activity","desc":true}],"filter":{"contentType":"TaskFilter","id":null,"config":{"contentType":"FilterConfig","termGroup":{"contentType":"FilterTermGroup","join":"and","terms":[{"contentType":"FilterTermEnum","field":"status","comparison":"equals","value":["filter_any"]},{"contentType":"FilterTermEnum","field":"type","comparison":"equals","value":["task"]},{"contentType":"FilterTermRef","field":"parent","comparison":"equals","value":[{"id":${proj_id},"contentType":"Project"}]}]}}},"limit":50}` )).data
 
 const createProjectComment = async ({ proj, content }) => (await megaplan_v3( 'POST',
 	`/api/v3/project/${proj.id}/comments`, {
@@ -550,7 +584,8 @@ const createProjectComment = async ({ proj, content }) => (await megaplan_v3( 'P
 			// }
 		},
 		transports: [ {} ]
-	})).data
+	}
+)).data
 
 export { 
 	megaplan,
@@ -559,6 +594,9 @@ export {
 	setTaskBudget,
 	getTasksToPay,
 	createTask,
+	doTaskAction,
+	createTaskComment,
 	getProj,
+	getProjTasks,
 	createProjectComment,
 }

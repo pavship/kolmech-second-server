@@ -7,15 +7,17 @@ import { clearCache, endJob, setStore } from '../src/user.js'
 import { outputJson, functionName, debugLog, despace } from '../src/utils.js'
 import { getOrg } from '../src/moedelo.js'
 import { amoBaseUrl, findAmoCompany, findAmoDeals, getAmoContact, getAmoStatuses, getDealNotes } from '../src/amo.js'
-import { createTask, getProj } from '../src/megaplan.js'
+import { createTask, createTaskComment, doTaskAction, getProj, getProjTasks } from '../src/megaplan.js'
 import { constructMoveMessageText } from './transfer-accounting.js'
 import { ceoImapConfig, serverSmtpTransporter } from '../src/mail.js'
 
 const handlePostReceipt = async data => {
-	if (process.env.debug) debugLog(functionName(), data)
+	if (process.env.debug) debugLog(functionName())
 	const { post, move } = data
 
 	if (!post) return askForRPO(data)
+
+	if (!post.dataIsPrepared) return prepareData(data)
 
 	if (!post.tracking) return getRPOInfo(data)
 
@@ -28,6 +30,8 @@ const handlePostReceipt = async data => {
 	if (!post.task) return askForPostTask(data)
 	
 	if (!move) return createMove(data)
+
+	if (!post.comment) return commentOnPost(data)
 	
 	if (!post.contact) return askForContact(data)
 	
@@ -97,9 +101,18 @@ const askForRPO = async data => {
 		rpo: data._rpo_start + text
 	}
 
-	;['actions', 'state', 'result_field', '_rpo_start'].forEach(k => delete data[k])
-	handlePostReceipt(data)
+	handlePostReceipt(clearCache(data))
 }
+
+const prepareData = async data => {
+	if (process.env.debug) debugLog(functionName(), data)
+	const { post } = data
+
+	post.dataIsPrepared = true
+	handlePostReceipt({ ...data, from_org: data.to_org, to_org: data.from_org })
+}
+
+
 
 const getRPOInfo = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
@@ -207,7 +220,7 @@ const askForPostTask = async data => {
 	const { msg: { text }, state, actions, post } = data
 
 	if (state !== 'ask-for-post-task') {
-		data._task = post.project.tasks?.find(t => t.name === 'Корреспонденция')
+		data._task = (await getProjTasks(post.project.id))?.find(t => t.name === 'Корреспонденция')
 		if (data._task) {
 			post.task = data._task
 			data.msg = await bot.sendMessage( data.user.chat_id,
@@ -227,6 +240,10 @@ const askForPostTask = async data => {
 				disable_web_page_preview: true
 			})
 		}
+
+		if (post.task.status === 'assigned')
+			await doTaskAction(post.task.id, {action: 'act_accept_work', checkTodos: true})
+		// await doTaskAction(post.task.id, {action: 'act_done', checkTodos: true})
 	}
 
 	handlePostReceipt(clearCache(data))
@@ -265,6 +282,44 @@ const createMove = async data => {
 	data.msg = await bot.sendMessage( data.user.chat_id,
 		constructMoveMessageText(data), {
 		parse_mode: 'HTML'
+	})
+
+	handlePostReceipt(clearCache(data))
+}
+
+const commentOnPost = async data => {
+	if (process.env.debug) debugLog(functionName(), data)
+	const { state, user, transfer, move, task, from_org, post } = data
+
+	if (!data._company) {
+		data._company = await findAmoCompany(from_org.Inn)
+		if (!data._company) {
+			data.msg = await bot.sendMessage( user.chat_id,
+				`Заполните ИНН ${from_org.Inn} поставщика ${from_org.ShortName} в AmoCRM`,
+				{
+					reply_markup: { inline_keyboard: [
+						[{
+							text: `Готово`,
+							callback_data: `commentOnPurchase:skip`
+						}],
+					]},
+					parse_mode: 'HTML'
+				}
+			)
+			data.state = 'commentOnPost'
+			return setStore(data)
+		}
+	}
+
+	post.comment = await createTaskComment({
+		task: post.task,
+		content: despace`
+			<p>🗓 ${new Date((transfer.datetime + 3*3600)*1000).toISOString().replace(/T|\.000Z/g, ' ')}
+			💵 ${move.paid} ₽
+			${!!data.from_org ? `🛒🏢 <a href='${amoBaseUrl}/companies/detail/${data._company.id}'>${data.from_org.ShortName}</a>` : ''}
+			✉️ https://www.pochta.ru/tracking#${post.rpo}
+			</p>
+		`
 	})
 
 	handlePostReceipt(clearCache(data))
@@ -321,8 +376,6 @@ const askForEmailToReply = async data => {
 		return endJob(data)
 	}
 
-	outputJson({messages, lastEmails})
-
 	handlePostReceipt(clearCache(data))
 }
 
@@ -354,7 +407,6 @@ const sendPostReply = async data => {
 	}
 
 	// DEBUG
-	post.email_address_to_answer = '_@_.com'
 
 	const info = await serverSmtpTransporter.sendMail({
 		from: `"Сервер ХОНИНГОВАНИЕ.РУ" <${process.env.EMAIL_USERS.split(" ")[2]}>`,

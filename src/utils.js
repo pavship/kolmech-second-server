@@ -19,7 +19,7 @@ function debugLog(func_name, data) {
 	for (const key in log_obj) {
 		if (key.startsWith(func_name)) appearance_counter++
 	}
-	log_obj[`${func_name}_${appearance_counter}`] = data
+	log_obj[`${func_name}_${appearance_counter}`] = data || '>'
 	fs.writeFileSync('./outputlog.json', JSON.stringify(log_obj, null, 2))
 }
 

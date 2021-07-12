@@ -95,7 +95,7 @@ bot.onText(/^t$/, async msg => {
 // DEBUG
 bot.onText(/^s$/, async msg => {
 	const data = JSON.parse(fs.readFileSync('outputdebug.json', 'utf-8'))
-	askForQty(data)
+	askForPostProject(data)
 })
 
 bot.onText(/\.amocrm\.ru\/companies\/detail/, async (msg) => {
@@ -245,7 +245,7 @@ bot.on('callback_query', async (callbackData) => {
 		case 'create-post-inlet-10':
 			createPostInlet10(data)
 			break
-		case 'handle-post-receipt':
+		case 'handlePostReceipt':
 			handlePostReceipt(data)
 			break
 		case 'ask-for-deal':

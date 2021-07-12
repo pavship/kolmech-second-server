@@ -617,7 +617,7 @@ const checkoutTransfer = async data => {
 				}),
 				...data.to_account.inn === '7724490000' ? [[{
 					text: 'Учесть почтовое отправление 📬',
-					callback_data: `handle-post-receipt`
+					callback_data: `handlePostReceipt`
 				}]] : [],
 				[{
 					text: 'Учесть 📊',

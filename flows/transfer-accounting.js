@@ -55,10 +55,7 @@ const askForSeller = async data => {
 							text: `🏢: ${to_org.ShortName} (ИНН: ${to_org.Inn})`,
 							callback_data: `ask-for-seller:inn:${to_org.Inn}`
 						}]] : [],
-					[{
-						text: 'Закончить 🔚',
-						callback_data: `cancel`
-					}]]
+					]
 				}
 			}
 		)
@@ -105,10 +102,7 @@ const transferAccounting5 = async data => {
 						text: `${p.humanNumber}. ${p.name} ${data.required_compensations.find(m => m.proj_id == p.id) ? '⤵️' : ''}`,
 						callback_data: `select-entity:proj:${p.id}`
 					}]): []),
-				[{
-					text: 'Закончить 🔚',
-					callback_data: `cancel`
-				}]]
+				]
 			}
 		}
 	)
