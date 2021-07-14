@@ -42,6 +42,7 @@ async function clearStore(chat_id) {
 }
 
 async function endJob(data, text) {
+	if (process.env.debug) console.log('< cancel')
 	clearStore(data.user.chat_id)
 	emptyDebugLog()
 	bot.sendMessage(data.user.chat_id, `${text ? text + '. ' : ''}Работа завершена`)

@@ -5,17 +5,20 @@ import nodemailer from 'nodemailer'
 // const boxes = await connection.getBoxes()
 // console.log('boxes > ', boxes)
 
+const EMAIL_USERS = process.env.EMAIL_USERS.split(' ')
+const EMAIL_PASSWORDS = process.env.EMAIL_PASSWORDS.split(' ')
+
 const serverSmtpTransporter = nodemailer.createTransport({
 	service: '"Yandex"', // no need to set host or port etc.
 	auth: {
-			user: process.env.EMAIL_USERS.split(' ')[2],
-			pass: process.env.EMAIL_PASSWORDS.split(' ')[2]
+			user: EMAIL_USERS[2],
+			pass: EMAIL_PASSWORDS[2]
 	}
 })
 
 const ceoImapConfig = {
 	user: process.env.EMAIL_USERS.split(' ')[0],
-	password: process.env.EMAIL_PASSWORDS.split(' ')[0],
+	password: EMAIL_PASSWORDS[0],
 	host: process.env.EMAIL_HOST,
 	port: 993,
 	tls: true,
@@ -23,13 +26,13 @@ const ceoImapConfig = {
 }
 
 const getEmailAttachments = async (user, from, time) => {
-	const userIndex = process.env.EMAIL_USERS.split(' ').indexOf(user)
+	const userIndex = EMAIL_USERS.indexOf(user)
 	if (userIndex === -1) return console.log(`there are no imap credentials for user > ${user}`)
 
 	const connection = await ImapSimple.connect({
 		imap: {
 			user,
-			password: process.env.EMAIL_PASSWORDS.split(' ')[userIndex],
+			password: EMAIL_PASSWORDS[userIndex],
 			host: process.env.EMAIL_HOST,
 			port: 993,
 			tls: true,
@@ -97,6 +100,8 @@ const getEmailAttachments = async (user, from, time) => {
 }
 
 export {
+	EMAIL_USERS,
+	EMAIL_PASSWORDS,
 	serverSmtpTransporter,
 	ceoImapConfig,
 	getEmailAttachments

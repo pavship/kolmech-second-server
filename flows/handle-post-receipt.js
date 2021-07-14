@@ -9,7 +9,7 @@ import { getOrg } from '../src/moedelo.js'
 import { amoBaseUrl, findAmoCompany, findAmoDeals, getAmoContact, getAmoStatuses, getDealNotes } from '../src/amo.js'
 import { createTask, createTaskComment, doTaskAction, getProj, getProjTasks } from '../src/megaplan.js'
 import { constructMoveMessageText } from './transfer-accounting.js'
-import { ceoImapConfig, serverSmtpTransporter } from '../src/mail.js'
+import { ceoImapConfig, EMAIL_USERS, serverSmtpTransporter } from '../src/mail.js'
 
 const handlePostReceipt = async data => {
 	if (process.env.debug) debugLog(functionName())
@@ -40,48 +40,6 @@ const handlePostReceipt = async data => {
 	if (!post.sent_reply) return sendPostReply(data)
 
 	endJob(data)
-
-	//#region soap
-	// const { response } = await soapRequest({
-	// 	url: 'https://tracking.russianpost.ru/rtm34?wsdl',
-	// 	headers: {'Content-Type': 'application/soap+xml;charset=utf-8'},
-	// 	xml: `
-	// 		<?xml version="1.0" encoding="UTF-8"?>
-	// 		<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:oper="http://russianpost.org/operationhistory" xmlns:data="http://russianpost.org/operationhistory/data" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
-	// 		<soap:Header/>
-	// 		<soap:Body>
-	// 			<oper:getOperationHistory>
-	// 				<data:OperationHistoryRequest>
-	// 					<data:Barcode>14041160000922</data:Barcode>  
-	// 					<data:MessageType>0</data:MessageType>
-	// 					<data:Language>RUS</data:Language>
-	// 				</data:OperationHistoryRequest>
-	// 				<data:AuthorizationHeader soapenv:mustUnderstand="1">
-	// 					<data:login>RDUpnMZnvlAxmM</data:login>
-	// 					<data:password>6UVbXQTecwRl</data:password>
-	// 				</data:AuthorizationHeader>
-	// 			</oper:getOperationHistory>
-	// 		</soap:Body>
-	// 		</soap:Envelope>
-	// 	`
-	// })
-	// const { headers, body, statusCode } = response
-	// console.log(headers)
-	// console.log(body)
-	// console.log(statusCode)
-
-	// var url = 'https://tracking.russianpost.ru/rtm34?wsdl'
-	// var args = {name: 'value'}
-	// soap.createClient(url, {
-	// 	forceSoap12Headers: true,
-	// 	wsdl_headers: {'Content-Type': 'application/soap+xml;charset=utf-8'},
-		
-	// }, function(err, client) {
-	// 		client.getOperationHistory(args, function(err, result) {
-	// 				console.log(result);
-	// 		});
-	// });
-	//#endregion
 }
 
 const askForRPO = async data => {
@@ -407,11 +365,12 @@ const sendPostReply = async data => {
 	}
 
 	// DEBUG
+	post.email_address_to_answer = EMAIL_USERS[EMAIL_USERS.length - 1]
 
 	const info = await serverSmtpTransporter.sendMail({
-		from: `"Сервер ХОНИНГОВАНИЕ.РУ" <${process.env.EMAIL_USERS.split(" ")[2]}>`,
+		from: `"Сервер ХОНИНГОВАНИЕ.РУ" <${EMAIL_USERS[2]}>`,
 		to: post.email_address_to_answer,
-		cc: process.env.EMAIL_USERS.split(' ')[1],
+		cc: EMAIL_USERS[1],
 		subject: post.email_to_reply.parts[0].body.subject[0],
 		inReplyTo: post.email_to_reply.parts[0].body['message-id'][0],
 		html: `

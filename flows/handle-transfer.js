@@ -174,12 +174,7 @@ const askForPayer = async data => {
 		data.msg = await bot.sendMessage( data.user.chat_id,
 			`Введите transfer_id или выберите плательщика или введите AmoId последнего`,
 			{
-				reply_markup: {
-					inline_keyboard: [
-						// ...(await getUsersContacts(data)).map(c => [{
-						// 	text: `👤 ${c.name}`,
-						// 	callback_data: `ask-for-payer:amo_id:${c.id}`
-						// }]),
+				reply_markup: { inline_keyboard: [
 					[{
 						text: '👤 Выбрать из списка работников',
 						callback_data: `ask-for-payer:employee`
@@ -192,11 +187,7 @@ const askForPayer = async data => {
 						text: '🏢 ИП ШПС',
 						callback_data: `ask-for-payer:inn:502238521208`
 					}],
-					[{
-						text: 'Закончить 🔚',
-						callback_data: `cancel`
-					}]]
-				}
+				]}
 			}
 		)
 		data.state = 'ask-for-payer'
@@ -204,7 +195,7 @@ const askForPayer = async data => {
 	}
 
 	if (actions?.[0] === 'employee') {
-		return askForEmployee(data)
+		return askForEmployee(clearCache(data))
 	}
 
 	const _askForAccountOfAmoId = amo_id => {
@@ -224,8 +215,7 @@ const askForPayer = async data => {
 	if (parseInt(text) < 20000000) {
 		data.transfer = await getTransfer(parseInt(text))
 		data.transfer.was_existent = true
-		;['actions', 'state', 'result_field', 'ask_for_account'].forEach(k => delete data[k])
-		return checkoutTransfer(data)
+		return checkoutTransfer(clearCache(data))
 	}
 	// amo_id is assumed to be > 20000000
 	else return _askForAccountOfAmoId(text)
@@ -288,8 +278,7 @@ const askForTransferId = async data => {
 
 	data.transfer = await getTransfer(parseInt(text))
 	data.transfer.was_existent = true
-	;['actions', 'state', 'result_field', 'ask_for_account'].forEach(k => delete data[k])
-	return checkoutTransfer(data)
+	return checkoutTransfer(clearCache(data))
 }
 
 const selectTochkaPayment = async data => {
@@ -345,26 +334,25 @@ const selectTochkaPayment = async data => {
 
 const askForAccount = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
-	const { msg: { text }, actions, state, result_field, ask_for_account: cache } = data
+	const { msg: { text }, actions, state, result_field } = data
 
 	if (state !== 'ask-for-account') {
-		const cache = data.ask_for_account = {}
-		cache.id_type = actions.length ? actions.shift() : 'amo_id'
-		cache.id = actions.length ? actions.shift() : parseInt(text)
-		cache.accounts = await db.any(
+		data._id_type = actions.length ? actions.shift() : 'amo_id'
+		data._id = actions.length ? actions.shift() : parseInt(text)
+		data._accounts = await db.any(
 			`SELECT * FROM public.account WHERE
-			${cache.id_type === 'amo_id' ? 'amo_id = $1' : ''}
-			${cache.id_type === 'inn' ? 'inn = $1' : ''}`,
-			cache.id
+			${data._id_type === 'amo_id' ? 'amo_id = $1' : ''}
+			${data._id_type === 'inn' ? 'inn = $1' : ''}`,
+			data._id
 		)
-		const general_account = cache.accounts.find(a => a.type === 'general')
-		const cash_account = cache.accounts.find(a => a.type === 'cash')
+		const general_account = data._accounts.find(a => a.type === 'general')
+		const cash_account = data._accounts.find(a => a.type === 'cash')
 		data.msg = await bot.sendMessage( data.user.chat_id,
 			`Выберите счёт ${result_field === 'to_account' ? 'получателя' : 'отправителя'} платежа`,
 			{
 				reply_markup: {
 					inline_keyboard: [
-						...cache.accounts.map(a => [{
+						...data._accounts.map(a => [{
 							text: `${
 								a.type === 'card' ? '💳' :
 								a.type === 'bank' ? '🏦' :
@@ -396,13 +384,12 @@ const askForAccount = async data => {
 	const param = actions[0]
 	data[result_field] = param === 'create-account'
 		? await db.one(
-			`INSERT INTO public.account(type, ${cache.id_type}) VALUES($1, $2) RETURNING *`,
-			[actions[1], cache.id]
+			`INSERT INTO public.account(type, ${data._id_type}) VALUES($1, $2) RETURNING *`,
+			[actions[1], data._id]
 		)
-		: cache.accounts.find(a => a.id === parseInt(param))
+		: data._accounts.find(a => a.id === parseInt(param))
 
-	;['actions', 'state', 'result_field', 'ask_for_account'].forEach(k => delete data[k])
-	return handleTransfer10(data)
+	return handleTransfer10(clearCache(data))
 }
 
 const askForPayee = async data => {
@@ -448,8 +435,8 @@ const getPayeeAccount = async data => {
 		WHERE type = $<to_account_type>
 		AND inn ${!!input.to_account_inn ? '= $<to_account_inn>' : 'IS NULL'}
 		AND holder ${!!input.to_account_holder ? '= $<to_account_holder>' : 'IS NULL'}
-		AND number ${!!input.to_account_number ? "LIKE '%'||$<to_account_number>" : 'IS NULL'}
-		AND phone ${!!input.to_account_phone ? '= $<to_account_phone>::VARCHAR(12)' : 'IS NULL'}`
+		${!!input.to_account_number ? "AND number LIKE '%'||$<to_account_number>" : ''}
+		${!!input.to_account_phone ? 'AND phone = $<to_account_phone>::VARCHAR(12)' : ''}`
 	console.log('query > ', query)
 	result = await db.oneOrNone(query, input)
 		|| await db.one(
@@ -602,8 +589,7 @@ const checkoutTransfer = async data => {
 								${!!transfer.was_existent ? `Учтено: ${transfer.paid_total} ₽` : ''}`
 	data.msg = await bot.sendMessage( user.chat_id, text,
 		{
-			reply_markup: {
-				inline_keyboard: [
+			reply_markup: { inline_keyboard: [
 				...data.moves.map(m => {
 					const { name, humanNumber } = 
 						m.task_id ? data.tasks.find(t => t.id == m.task_id) :
@@ -619,14 +605,15 @@ const checkoutTransfer = async data => {
 					text: 'Учесть почтовое отправление 📬',
 					callback_data: `handlePostReceipt`
 				}]] : [],
+				...data.to_account.inn === '502210907346' ? [[{
+					text: 'Учесть доставку 🚚',
+					callback_data: `handleDeliveryReceipt`
+				}]] : [],
 				[{
 					text: 'Учесть 📊',
 					callback_data: `transfer-accounting-0`
-				}],[{
-					text: 'Закончить 🔚',
-					callback_data: `cancel`
-				}]]
-			},
+				}],
+			]},
 			parse_mode: 'HTML'
 		}
 	)

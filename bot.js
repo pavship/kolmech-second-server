@@ -12,6 +12,7 @@ import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany
 import { endJob, getStore, getUser } from './src/user.js'
 import { outputJson } from './src/utils.js'
 import { askForDeal, askForEmailToReply, askForPostProject, askForPostTask, askForRPO, handlePostReceipt, sendPostReply } from './flows/handle-post-receipt.js'
+import { askForDeliveryProject, commentOnDelivery, handleDeliveryReceipt } from './flows/handle-delivery-receipt.js'
 
 dotenv.config()
 
@@ -60,6 +61,9 @@ bot.on('text', async (msg) => {
 			break
 		case 'ask-for-rpo':
 			askForRPO(data)
+			break
+		case 'askForDeliveryProject':
+			askForDeliveryProject(data)
 			break
 		default:
 			console.log('unhandled state with data> ', data)
@@ -201,7 +205,9 @@ bot.on('callback_query', async (callbackData) => {
 	if (!data || data.msg.message_id !== msg.message_id) return
 	data.actions = actions.split(':')
 	console.log('data.actions > ', data.actions)
-	switch (data.actions.shift()) {
+	const action = data.actions.shift()
+	if (!data.actions.length) delete data.actions
+	switch (action) {
 		case 'selectTochkaPayment':
 			selectTochkaPayment(data)
 			break
@@ -259,6 +265,15 @@ bot.on('callback_query', async (callbackData) => {
 			break
 		case 'send-post-reply':
 			sendPostReply(data)
+			break
+		case 'handleDeliveryReceipt':
+			handleDeliveryReceipt(data)
+			break
+		case 'askForDeliveryProject':
+			askForDeliveryProject(data)
+			break
+		case 'commentOnDelivery':
+			commentOnDelivery(data)
 			break
 		case 'cancel':
 			endJob(data)
