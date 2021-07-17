@@ -12,7 +12,7 @@ import { createCompanyFolder, createPostInlet5, createPostInlet10, handleCompany
 import { endJob, getStore, getUser } from './src/user.js'
 import { outputJson } from './src/utils.js'
 import { askForDeal, askForEmailToReply, askForPostProject, askForPostTask, askForRPO, handlePostReceipt, sendPostReply } from './flows/handle-post-receipt.js'
-import { askForDeliveryProject, commentOnDelivery, handleDeliveryReceipt } from './flows/handle-delivery-receipt.js'
+import { askForDeliveryProject, askForDeliverySenderProject, commentOnDelivery, handleDeliveryReceipt } from './flows/handle-delivery-receipt.js'
 
 dotenv.config()
 
@@ -61,6 +61,9 @@ bot.on('text', async (msg) => {
 			break
 		case 'ask-for-rpo':
 			askForRPO(data)
+			break
+		case 'askForDeliverySenderProject':
+			askForDeliverySenderProject(data)
 			break
 		case 'askForDeliveryProject':
 			askForDeliveryProject(data)
@@ -268,6 +271,9 @@ bot.on('callback_query', async (callbackData) => {
 			break
 		case 'handleDeliveryReceipt':
 			handleDeliveryReceipt(data)
+			break
+		case 'askForDeliverySenderProject':
+			askForDeliverySenderProject(data)
 			break
 		case 'askForDeliveryProject':
 			askForDeliveryProject(data)

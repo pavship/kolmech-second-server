@@ -605,7 +605,10 @@ const checkoutTransfer = async data => {
 					text: 'Учесть почтовое отправление 📬',
 					callback_data: `handlePostReceipt`
 				}]] : [],
-				...data.to_account.inn === '502210907346' ? [[{
+				...[
+					'502210907346', //СДЭК
+					'7724315304'		//Энергия
+				].includes(data.to_account.inn) ? [[{
 					text: 'Учесть доставку 🚚',
 					callback_data: `handleDeliveryReceipt`
 				}]] : [],

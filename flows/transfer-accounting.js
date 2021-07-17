@@ -10,8 +10,11 @@ import { getOrg } from '../src/moedelo.js'
 const transferAccounting0 = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
 	const { actions } = data
-	const edit_move_id = parseInt(actions.shift())
-	if (edit_move_id) return checkoutMove({ ...data, move: await db.one("SELECT * FROM public.move WHERE id = $1", edit_move_id) })
+	
+	if (actions) {
+		data.move = await db.one("SELECT * FROM public.move WHERE id = $1", actions[0])
+		return checkoutMove(clearCache(data))
+	}
 
 	// 1. Copy known props
 	data.move = {
@@ -271,7 +274,7 @@ const createMove = async data => {
 
 const commentOnPurchase = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
-	const { state, user, transfer, move, proj, to_org } = data
+	const { state, user, transfer, move, proj, to_org, to_amo } = data
 
 	if (!!data.to_org && !data._company) {
 		data._company = await findAmoCompany(to_org.Inn)
@@ -299,8 +302,8 @@ const commentOnPurchase = async data => {
 			<p>🗓 ${new Date((transfer.datetime + 3*3600)*1000).toISOString().replace(/T|\.000Z/g, ' ')}
 			${move.qty ? `🔢 ${move.qty} шт.` : ''}
 			💵 ${move.paid} ₽
-			${!!data.to_amo ? `🛒👤 <a href='${amoBaseUrl}/contacts/detail/${data.to_amo.id}'>${data.to_amo.name}</a>` : ''}
-			${!!data.to_org ? `🛒🏢 <a href='${amoBaseUrl}/companies/detail/${data._company.id}'>${data.to_org.ShortName}</a>` : ''}
+			${!!to_amo ? `🛒👤 <a href='${amoBaseUrl}/contacts/detail/${to_amo.id}'>${to_amo.name}</a>` : ''}
+			${!!to_org ? `🛒🏢 <a href='${amoBaseUrl}/companies/detail/${data._company.id}'>${to_org.ShortName}</a>` : ''}
 			</p>
 		`
 	})

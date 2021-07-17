@@ -2,10 +2,10 @@ import axios from 'axios'
 
 const moedelo = axios.create({
 	baseURL: 'https://restapi.moedelo.org',
-  headers: {
-    'md-api-key': process.env.MOEDELO_SECRET,
-    'Content-Type': 'application/json',
-  }
+	headers: {
+		'md-api-key': process.env.MOEDELO_SECRET,
+		'Content-Type': 'application/json',
+	}
 })
 
 const getOrg = async ({ inn, name }) => {
