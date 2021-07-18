@@ -8,10 +8,11 @@ import { clearCache, endJob, setStore } from '../src/user.js'
 import { outputJson, functionName, debugLog, despace } from '../src/utils.js'
 import { getOrg } from '../src/moedelo.js'
 import { amoBaseUrl, findAmoCompany, findAmoContacts, getAmoContact } from '../src/amo.js'
-import { createTask, createTaskComment, doTaskAction, getProj, getProjTasks, megaplan_v3 } from '../src/megaplan.js'
+import { createTask, createTaskComment, doTaskAction, getProj, getProjTasks, megaplan_v3, updateTask } from '../src/megaplan.js'
 import { constructMoveMessageText } from './transfer-accounting.js'
 import { ceoImapConfig, serverSmtpTransporter } from '../src/mail.js'
 import { getNrgSendings } from '../src/nrg-tk.js'
+import { sendTaskMsg } from '../bot/messages.js'
 
 const handleDeliveryReceipt = async data => {
 	if (process.env.debug) debugLog(functionName())
@@ -25,59 +26,35 @@ const handleDeliveryReceipt = async data => {
 
 		for (const sending of delivery.sendings) {
 
-			if (!sending.sender && !sending.project) return askForDeliverySender(data)
-			
-			if (!sending.project && delivery.project) 
-			['task', 'project'].forEach(k => { sending[k] = delivery[k]; delete delivery[k] })
-			
-			if (sending.sender && !sending.project) return askForDeliverySenderProject(data)
-			
-			if (!sending.move) return createMove(data)
+			if (sending.move) continue
 
-			if (!sending.comment) return commentOnDelivery(data)
+			data.sending = sending
 
-			delete data.move
+			if (!sending.sender && !delivery.task) return askForDeliverySender(data)
 			
-			outputJson(data)
-		
-			return
+			if (!delivery.task) return askForDeliverySenderProject(data)
+			
+			if (!move) return createMove(data)
+
+			if (!move.comment_id) return commentOnDelivery(data)
+
+			;['task', 'project'].forEach(k => { sending[k] = delivery[k]; delete delivery[k] })
+			;['move'].forEach(k => { sending[k] = data[k]; delete data[k] })
+			delete data.sending
 		}
-
+		
 	}
 
-
-	if (!delivery.task) return askForDeliveryProject(data)
-
-	if (!move) return createMove(data)
-
-	if (!delivery.comment) return commentOnDelivery(data)
+	else {
+		
+		if (!delivery.task) return askForDeliveryProject(data)
 	
-	endJob(data)
-
-	return
+		if (!move) return createMove(data)
 	
-	// if (from_org.inn === '502210907346') 
-
-	if (!delivery.track_number) return askForRPO(data)
-
-
-	// if (!delivery.tracking) return getRPOInfo(data)
-
-	// if (!delivery.company) return askForRecipient(data)
+		if (!delivery.comment) return commentOnDelivery(data)
+		
+	}
 	
-	// if (!delivery.deal) return askForDeal(data)
-
-	// 
-
-	// if (!delivery.task) return askForPostTask(data)
-	
-	
-	// if (!delivery.contact) return askForContact(data)
-	
-	// if (!delivery.email_to_reply) return askForEmailToReply(data)
-
-	// if (!delivery.sent_reply) return sendPostReply(data)
-
 	endJob(data)
 }
 
@@ -111,10 +88,9 @@ const getDeliverySendings = async data => {
 
 const askForDeliverySender = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
-	const { msg: { text }, state, actions, transfer, delivery } = data
+	const { msg: { text }, state, actions, delivery, sending } = data
 	
 	if (state !== 'askForDeliverySender') {
-		const sending = delivery.sendings.find(s => !Object.keys(s).includes('sender'))
 		data._sender = (await findAmoContacts({ query: sending.supplier_item.clientFromFullTitle }))[0]
 		if (data._sender) {
 			sending.sender = data._sender
@@ -130,27 +106,17 @@ const askForDeliverySender = async data => {
 			return askForDeliveryProject(clearCache(data))
 		}
 	}
-
-	// data._contact = getAmoContact(text)
-	// if (data._contact) sending.sender = data._contact
-	// else {
-	// 	data._project = getProj(text)
-	// 	if (data._project) sending.project = data._project
-	// }
-
-	// handleDeliveryReceipt(clearCache(data))
 }
 
 const askForDeliverySenderProject = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
-	const { msg: { text }, state, actions, delivery } = data
+	const { msg: { text }, state, actions, delivery, sending } = data
 	
 	if (state !== 'askForDeliverySenderProject') {
-		data._sending = delivery.sendings.find(s => s.sender && !s.project)
 		data._sender_projects_ids = (await db.any(
 			`SELECT DISTINCT proj_id FROM public.move
 			WHERE from_amo_id = $1`,
-			data._sending.sender.id
+			sending.sender.id
 		)).reduce((res, { proj_id }) => [ ...res, proj_id ], [])
 		data._sender_projects = await Promise.all(data._sender_projects_ids.map(id => getProj(id)))
 		data.msg = await bot.sendMessage( data.user.chat_id,
@@ -175,21 +141,22 @@ const askForDeliverySenderProject = async data => {
 		|| await createTask({
 				name: 'Доставка',
 				parent: { contentType: 'Project', id: project_id},
-				actualStart: {contentType: 'DateTime', value: new Date((data._sending.supplier_item.sendDate)*1000).toISOString() },
-				plannedFinish: {contentType: 'DateTime', value: new Date((data._sending.supplier_item.states.find(s => s.title === 'Выдана').movingDate)*1000).toISOString() },
+				actualStart: {contentType: 'DateTime', value: new Date((sending.supplier_item.sendDate)*1000).toISOString() },
+				plannedFinish: {contentType: 'DateTime', value: new Date((sending.supplier_item.states.find(s => s.title === 'Выдана').movingDate)*1000).toISOString() },
 			})
 	delivery.project = delivery.task.project
 
 	if (delivery.task.status === 'assigned')
 			await doTaskAction(delivery.task.id, {action: 'act_accept_work', checkTodos: true})
+	
+	data.msg = await sendTaskMsg(data, delivery.task)
 
 	handleDeliveryReceipt(clearCache(data))
 }
 
 const askForDeliveryProject = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
-	const { msg: { text }, state, actions, delivery } = data
-	const sending = delivery.sendings?.find(s => !s.sender && !s.project)
+	const { msg: { text }, state, actions, delivery, sending } = data
 
 	if (state !== 'askForDeliveryProject') {
 		data._deliveryTasks = (await megaplan_v3( 'GET', `/api/v3/task?{"fields":["name","finishedTodosCount","actualTodosCount","activity","deadline","responsible","owner","unreadCommentsCount","isFavorite","status","project"],"sortBy":[{"contentType":"SortField","fieldName":"activity","desc":true}],"filter":{"contentType":"TaskFilter","id":null,"config":{"contentType":"FilterConfig","termGroup":{"contentType":"FilterTermGroup","join":"and","terms":[{"contentType":"FilterTermEnum","field":"status","comparison":"equals","value":["filter_actual"]},{"contentType":"FilterTermString","field":"name","comparison":"equals","value":"%D0%94%D0%BE%D1%81%D1%82%D0%B0%D0%B2%D0%BA%D0%B0"}]}}},"limit":50}` )).data
@@ -215,13 +182,19 @@ const askForDeliveryProject = async data => {
 	if (delivery.task.status === 'assigned')
 			await doTaskAction(delivery.task.id, {action: 'act_accept_work', checkTodos: true})
 
+	if (delivery.supplier === 'nrg-tk') await updateTask(delivery.task.id, {
+		actualStart: {contentType: 'DateTime', value: new Date((sending.supplier_item.sendDate)*1000).toISOString() },
+		plannedFinish: {contentType: 'DateTime', value: new Date((sending.supplier_item.states.find(s => s.title === 'Выдана').movingDate)*1000).toISOString() },
+	})
+
+	data.msg = await sendTaskMsg(data, delivery.task)
+
 	handleDeliveryReceipt(clearCache(data))
 }
 
 const createMove = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
-	const { msg: { text }, state, actions, transfer, to_account, from_account, delivery } = data
-	const sending = delivery.sendings?.find(s => s.task && !s.move)
+	const { msg: { text }, state, actions, transfer, to_account, from_account, delivery, sending } = data
 
 	data._move = {
 		transfer_id: transfer.id,
@@ -231,7 +204,7 @@ const createMove = async data => {
 		from_inn: to_account.inn,
 		to_amo_id: from_account.amo_id,
 		to_inn: from_account.inn,
-		task_id: sending ? sending.task.id : delivery.task.id,
+		task_id: delivery.task.id,
 		proj_id: null,
 	}
 
@@ -249,11 +222,6 @@ const createMove = async data => {
 		data.move.was_created = true
 	}
 
-	if (sending) {
-		sending.move = data.move
-		// delete data.move
-	}
-
 	data.msg = await bot.sendMessage( data.user.chat_id,
 		constructMoveMessageText(data), {
 		parse_mode: 'HTML'
@@ -264,8 +232,7 @@ const createMove = async data => {
 
 const commentOnDelivery = async data => {
 	if (process.env.debug) debugLog(functionName(), data)
-	const { state, user, transfer, move, from_org, delivery } = data
-	const sending = delivery.sendings?.find(s => s.move && !s.comment)
+	const { state, user, transfer, move, from_org, delivery, sending } = data
 
 	if (!data._company) {
 		data._company = await findAmoCompany(from_org.Inn)
@@ -287,20 +254,21 @@ const commentOnDelivery = async data => {
 		}
 	}
 
-	delivery.comment = await createTaskComment({
-		task: sending?.task || delivery.task,
+	const comment = await createTaskComment({
+		task: delivery.task,
 		content: despace`
 			<p>🗓 ${new Date((transfer.datetime + 3*3600)*1000).toISOString().replace(/T|\.000Z/g, ' ')}
 			💵 ${move.paid} ₽
 			${!!data.from_org ? `🛒🏢 <a href='${amoBaseUrl}/companies/detail/${data._company.id}'>${data.from_org.ShortName}</a>` : ''}
+			${delivery.supplier === 'nrg-tk' ? `🚚 https://nrg-tk.ru/client/tracking/#${sending.supplier_item.docNum}` : ''}
 			</p>
 		`
 	})
 
-	if (sending) {
-		sending.comment = delivery.comment
-		delete delivery.comment
-	}
+	data.move = await db.one(
+		`UPDATE move SET comment_id = $1 WHERE id = $2 RETURNING *`,
+		[comment.id, data.move.id]
+	)
 
 	handleDeliveryReceipt(clearCache(data))
 }

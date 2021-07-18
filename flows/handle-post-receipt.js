@@ -10,6 +10,7 @@ import { amoBaseUrl, findAmoCompany, findAmoDeals, getAmoContact, getAmoStatuses
 import { createTask, createTaskComment, doTaskAction, getProj, getProjTasks } from '../src/megaplan.js'
 import { constructMoveMessageText } from './transfer-accounting.js'
 import { ceoImapConfig, EMAIL_USERS, serverSmtpTransporter } from '../src/mail.js'
+import { sendTaskMsg } from '../bot/messages.js'
 
 const handlePostReceipt = async data => {
 	if (process.env.debug) debugLog(functionName())
@@ -178,26 +179,12 @@ const askForPostTask = async data => {
 	const { msg: { text }, state, actions, post } = data
 
 	if (state !== 'ask-for-post-task') {
-		data._task = (await getProjTasks(post.project.id))?.find(t => t.name === 'Корреспонденция')
-		if (data._task) {
-			post.task = data._task
-			data.msg = await bot.sendMessage( data.user.chat_id,
-				`Выбрана существовавшая задача <a href='https://${process.env.MEGAPLAN_HOST}/task/${post.task.id}/card/'>${post.task.name}</a>`, {
-				parse_mode: 'HTML',
-				disable_web_page_preview: true
-			})
-		}
-		else {
-			post.task = await createTask({
-				name: 'Корреспонденция',
-				parent: {id: post.project.id, contentType: 'Project'}
-			})
-			data.msg = await bot.sendMessage( data.user.chat_id,
-				`Создана задача <a href='https://${process.env.MEGAPLAN_HOST}/task/${post.task.id}/card/'>${post.task.name}</a>`, {
-				parse_mode: 'HTML',
-				disable_web_page_preview: true
-			})
-		}
+		post.task = (await getProjTasks(post.project.id))?.find(t => t.name === 'Корреспонденция')
+			|| await createTask({
+					name: 'Корреспонденция',
+					parent: {id: post.project.id, contentType: 'Project'}
+				})
+		data.msg = await sendTaskMsg(data, post.task)
 
 		if (post.task.status === 'assigned')
 			await doTaskAction(post.task.id, {action: 'act_accept_work', checkTodos: true})

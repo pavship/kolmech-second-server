@@ -520,8 +520,10 @@ const createTask = async ({ name, parent, actualStart, plannedFinish }) => {
 		...plannedFinish && { plannedFinish },
 	})).data
 	console.log('task created > ', result.id)
-	return result
+	return { ...result, was_created: true }
 }
+
+const updateTask = async (task_id, payload) => (await megaplan_v3( 'POST', `/api/v3/task/${task_id}`, payload )).data
 
 const doTaskAction = async (task_id, { action, checkTodos }) => (await megaplan_v3( 'POST', `/api/v3/task/${task_id}/doAction`, { action, checkTodos } )).data
 
@@ -596,6 +598,7 @@ export {
 	setTaskBudget,
 	getTasksToPay,
 	createTask,
+	updateTask,
 	doTaskAction,
 	createTaskComment,
 	getProj,
